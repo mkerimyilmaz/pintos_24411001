@@ -155,11 +155,11 @@ void timer_wait (int64_t ticks)
   if (ticks <= 0)
     return;
 
-  struct thread *cur = thread_current ();
+  struct thread *current_thread = thread_current ();
   enum intr_level old_level = intr_disable ();
-  cur->waking_up_time = ticks;
+  current_thread->waking_up_time = ticks;
 
-  list_insert_ordered(&timer_wait_list, &cur->elem, tick_less, NULL);
+  list_insert_ordered(&timer_wait_list, &current_thread->elem, tick_less, NULL);
   thread_block();
   intr_set_level (old_level);
 }
