@@ -200,10 +200,20 @@ lock_acquire (struct lock *lock)
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
   if(lock->holder != NULL)
-{
-  if(lock->holder->priority < thread_current()->priority)
-{  
-    lock->holder->priority = thread_current()->priority;
+  {
+    thread_current()->blocked_by= lock;
+    if(lock->holder->priority < thread_current()->priority)
+    {  struct thread *temp=thread_current();
+       while(temp->blocked_by!=NULL)
+       {
+         struct lock *cur_lock=temp->blocked_by;
+         cur_lock->holder->priorities[cur_lock->holder->size] = temp->priority;
+         cur_lock->holder->size+=1;
+         cur_lock->holder->priority = temp->priority;
+         if(cur_lock->holder->status == THREAD_READY)
+           break;
+         temp=cur_lock->holder;
+       }
     lock->is_donated = true;
     
     apply_sorting_to_ready_list();
@@ -245,9 +255,23 @@ lock_release (struct lock *lock)
 {
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
+  
+  struct semaphore *lock_sema=&lock->semaphore;
+  list_sort(&lock_sema->waiters, check_priority, 0);
+  
   if (lock->is_donated){
-  thread_current()->priority = thread_current()->first_priority;
+  thread_current()->index_of_donation -=1;
+  int elem=list_entry (list_front (&lock_sema->waiters),struct thread, elem)->priority;
+  search_array(thread_current(),elem);
+  thread_current()->priorities[(thread_current()->size)-1] = 0;
+  thread_current()->size -= 1;
+  thread_current()->priority = thread_current()->priorities[(thread_current()->size)-1];
   lock->is_donated = false;
+  }
+  if(thread_current()->index_of_donation ==0)
+  {
+  thread_current()-> size=1;
+  thread_current()-> priority = thread_current()->priorities[0];
   }
   
   lock->holder = NULL;

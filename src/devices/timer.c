@@ -96,14 +96,20 @@ timer_elapsed (int64_t then)
 
 /* Sleeps for approximately TICKS timer ticks.  Interrupts must
    be turned on. */
-void
+void//todo: check this functions
 timer_sleep (int64_t ticks)
-{
-  int64_t start = timer_ticks ();
-
+{ struct lock sleep_lock;
+  lock_init (&sleep_lock);
+  lock_acquire (&sleep_lock);
+  
   ASSERT (intr_get_level () == INTR_ON);
 
+  int64_t start = timer_ticks ();
+  struct thread *cur = thread_current ();
+  thread_current()->waking_up_time = start + ticks;
+
   timer_wait(start + ticks);
+  lock_release (&sleep_lock);
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be

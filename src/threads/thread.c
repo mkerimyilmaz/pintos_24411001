@@ -343,11 +343,10 @@ thread_set_priority (int new_priority)
   if(thread_current()->priority == thread_current()->first_priority)
   { 
     
-    thread_current ()->priority = new_priority;
-    thread_current()->first_priority=new_priority;
+    thread_current ()->priorities[0] = new_priority;
+    thread_current()->size == 1;
     thread_yield();
   }
-  thread_current()->first_priority=new_priority;
 
 }
 
@@ -476,6 +475,11 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
+
+  t->priorities[0] = priority;
+  t->index_of_donation=0;
+  t->size = 1;
+  t->blocked_by=NULL;
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
@@ -606,6 +610,23 @@ void apply_sorting_to_ready_list(void)
 {
   list_sort(&ready_list, check_priority, 0);
 }
+
+void search_array(struct thread *cur,int elem)
+{ int found=0;
+  for(int i=0;i<(cur->size)-1;i++)
+  {
+  if(cur->priorities[i]==elem)
+    {
+     found=1;
+    }
+  if(found==1)
+    {
+     cur->priorities[i]=cur->priorities[i+1];
+    }
+  }
+  cur->size -=1;
+}
+
 
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
