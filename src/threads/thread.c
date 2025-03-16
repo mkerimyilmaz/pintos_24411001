@@ -204,6 +204,7 @@ thread_create (const char *name, int priority,
 
   /* Add to run queue. */
   thread_unblock (t);
+  thread_yield();
 
   return tid;
 }
@@ -581,6 +582,16 @@ allocate_tid (void)
   lock_release (&tid_lock);
 
   return tid;
+}
+
+
+bool check_priority(struct list_elem *l1, struct list_elem *l2,void *aux)
+{
+  struct thread *t1 = list_entry(l1,struct thread,elem);
+  struct thread *t2 = list_entry(l2,struct thread,elem);
+  if( t1->priority > t2->priority)
+    return true;
+  return false;
 }
 
 /* Offset of `stack' member within `struct thread'.
