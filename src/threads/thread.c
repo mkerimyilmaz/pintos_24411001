@@ -267,7 +267,11 @@ thread_current (void)
      have overflowed its stack.  Each thread has less than 4 kB
      of stack, so a few big automatic arrays or moderate
      recursion can cause stack overflow. */
+  printf("thread %s" , t->status);
+  debug_backtrace();
   ASSERT (is_thread (t));
+  printf("thread %s" , t->status);
+  debug_backtrace();
   ASSERT (t->status == THREAD_RUNNING);
 
   return t;
@@ -338,16 +342,14 @@ thread_foreach (thread_action_func *func, void *aux)
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
-thread_set_priority (int new_priority)
+thread_set_priority (int new_priority) 
 {
-  if(thread_current()->priority == thread_current()->first_priority)
+  thread_current()->priorities[0] = new_priority;
+  if(thread_current()->size==1)
   { 
-    
-    thread_current ()->priorities[0] = new_priority;
-    thread_current()->size == 1;
+    thread_current ()->priority = new_priority;
     thread_yield();
   }
-
 }
 
 /* Returns the current thread's priority. */
@@ -575,6 +577,7 @@ schedule (void)
 
   ASSERT (intr_get_level () == INTR_OFF);
   ASSERT (cur->status != THREAD_RUNNING);
+  debug_backtrace();
   ASSERT (is_thread (next));
 
   if (cur != next)

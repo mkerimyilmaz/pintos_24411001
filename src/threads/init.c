@@ -76,6 +76,7 @@ int main (void) NO_RETURN;
 int
 main (void)
 {
+  printf("test test test ");
   char **argv;
 
   /* Clear BSS. */  
