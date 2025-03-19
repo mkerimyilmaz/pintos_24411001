@@ -350,10 +350,12 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread)
+
   list_insert_ordered (&ready_list, &cur->elem, priority_ordering_comparator, NULL);
   //todo
   //if (cur != idle_thread)
   //  list_push_back (&ready_list, &cur->elem);
+  list_insert_ordered (&ready_list, &cur->elem, check_priority, 0);
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -519,6 +521,11 @@ init_thread (struct thread *t, const char *name, int priority)
   t->curr_lock = NULL;
   list_init (&t->held_lock);
 
+  t->priorities[0] = priority;
+  t->index_of_donation=0;
+  t->size = 1;
+  t->blocked_by=NULL;
+
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
   intr_set_level (old_level);
@@ -645,6 +652,28 @@ bool check_priority(struct list_elem *l1, struct list_elem *l2,void *aux)
     return true;
   return false;
 }
+
+void apply_sorting_to_ready_list(void)
+{
+  list_sort(&ready_list, check_priority, 0);
+}
+
+void search_array(struct thread *cur,int elem)
+{ int found=0;
+  for(int i=0;i<(cur->size)-1;i++)
+  {
+  if(cur->priorities[i]==elem)
+    {
+     found=1;
+    }
+  if(found==1)
+    {
+     cur->priorities[i]=cur->priorities[i+1];
+    }
+  }
+  cur->size -=1;
+}
+
 
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */

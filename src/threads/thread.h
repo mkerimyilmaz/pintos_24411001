@@ -89,7 +89,9 @@ struct thread
     enum thread_status status;          /* Thread state. */
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
-    int priority;                       /* Priority. */
+    int priority;
+    int priorities[9];                 
+    int size;         
     struct list_elem allelem;           /* List element for all threads list. */
 
     /* Shared between thread.c and synch.c. */
@@ -102,6 +104,8 @@ struct thread
 
     // New Property to store when to wake up the thread
     int64_t waking_up_time;
+    int index_of_donation;   
+    struct lock *blocked_by;
 
 
     /* Owned by thread.c. */
@@ -161,8 +165,10 @@ bool priority_ordering_comparator (const struct list_elem *, const struct list_e
 
 //todo
 bool check_priority(struct list_elem *l1, struct list_elem *l2, void *aux);
+void apply_sorting_to_ready_list(void);
 
 bool thread_priority_compare(const struct list_elem *, const struct list_elem *, void *);
+void search_list(struct thread *cur,int elem);
 
 
 #endif /* threads/thread.h */

@@ -114,7 +114,7 @@ struct list
    A list may be initialized by calling list_init():
 
        struct list my_list;
-       list_init (&my_list);
+       list_init (&my_list);_
 
    or with an initializer using LIST_INITIALIZER:
 
