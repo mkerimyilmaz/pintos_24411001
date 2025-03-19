@@ -99,7 +99,7 @@ timer_elapsed (int64_t then)
 void
 timer_sleep (int64_t ticks)
 {
-  if (ticks <= 0)
+  if (ticks <= 0) //Belki bunu silebilirim :todo
   return;
 
   int64_t start = timer_ticks ();
@@ -144,58 +144,54 @@ timer_nsleep (int64_t ns)
    will cause timer ticks to be lost.  Thus, use timer_msleep()
    instead if interrupts are enabled. */
 
-// New
-
-static bool tick_less (const struct list_elem *aa, const struct list_elem *bb, void *aux) {
-  ASSERT (aa != NULL);
-  ASSERT (bb != NULL);
-  struct thread *a = list_entry (aa, struct thread, elem);
-  struct thread *b = list_entry (bb, struct thread, elem);
-  return a->waking_up_time < b->waking_up_time;
+// TODO
+static bool tick_less (const struct list_elem *elem_a, const struct list_elem *elem_b, void *auxiliary) {
+  ASSERT (elem_a != NULL);
+  ASSERT (elem_b != NULL);
+  struct thread *thread_a = list_entry (elem_a, struct thread, elem);
+  struct thread *thread_b = list_entry (elem_b, struct thread, elem);
+  return thread_a->waking_up_time < thread_b->waking_up_time;
 }
 
-// New
-void timer_wait (int64_t ticks)
-{
-  // Sleep for 0 ticks
-  if (ticks <= 0)
+// TODO
+void timer_wait (int64_t delay_ticks) {
+  if (delay_ticks <= 0)
     return;
 
-  struct thread *cur = thread_current ();
-  enum intr_level old_level = intr_disable ();
-  cur->waking_up_time = ticks;
+  struct thread *current_thread = thread_current();
+  if (current_thread == NULL)
+    return;
 
-  list_insert_ordered(&timer_wait_list, &cur->elem, tick_less, NULL);
+  enum intr_level previous_level = intr_disable();
+  current_thread->waking_up_time = delay_ticks;
+  list_insert_ordered(&timer_wait_list, &current_thread->elem, tick_less, NULL);
   thread_block();
-  intr_set_level (old_level);
+  intr_set_level(previous_level);
 }
 
-// New
-void timer_wakeup()
-{
-  struct thread *t;
-  struct list_elem *cur = list_begin (&timer_wait_list), *next;
+// TODO
+void timer_wakeup() {
+  struct list_elem *current_elem, *next_elem;
+  struct thread *thread_ptr;
 
-  if (list_empty (&timer_wait_list))
+  if (list_empty(&timer_wait_list))
     return;
 
-  while (cur != list_end (&timer_wait_list))
-    {
-      next = list_next (cur);
-      t = list_entry (cur, struct thread, elem);
-      if (t->waking_up_time > timer_ticks())
-        break;
+  current_elem = list_begin(&timer_wait_list);
+  while (current_elem != list_end(&timer_wait_list)) {
+    next_elem = list_next(current_elem);
+    thread_ptr = list_entry(current_elem, struct thread, elem);
+    if (thread_ptr == NULL || thread_ptr->waking_up_time > timer_ticks())
+      break;
 
-      // Remove the thread from timer_wait_list
-      // then unblock it
-      enum intr_level old_level;
-      old_level = intr_disable ();
-      list_remove (cur);
-      thread_unblock (t);
-      intr_set_level (old_level);
-      cur = next;
-    }
+    enum intr_level previous_level = intr_disable();
+    list_remove(current_elem);
+    thread_unblock(thread_ptr);
+    intr_set_level(previous_level);
+    current_elem = next_elem;
+  }
 }
+
 
 void
 timer_mdelay (int64_t ms)
