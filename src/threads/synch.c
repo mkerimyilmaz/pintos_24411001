@@ -201,49 +201,62 @@ lock_init (struct lock *lock)
    interrupt handler.  This function may be called with
    interrupts disabled, but interrupts will be turned back on if
    we need to sleep. */
-void
-lock_acquire (struct lock *lock)
-{
-  ASSERT (lock != NULL);
-  ASSERT (!intr_context ());
-  ASSERT (!lock_held_by_current_thread (lock));
+// TODO
+static void propagate_priority(struct lock *lock, int current_priority) {
+  struct lock *current_lock = lock;
+  struct thread *lock_owner = lock->holder;
+  
+  while (current_lock->max_p < current_priority) {
+      current_lock->max_p = current_priority;
+      update_thread_state(lock_owner);
+      
+      if (lock_owner->status == THREAD_READY) {
+          sort_ready_queue(lock_owner);
+      }
+
+      current_lock = lock_owner->curr_lock;
+      if (current_lock == NULL)
+          break;
+      else
+          lock_owner = current_lock->holder;
+      
+      ASSERT(lock_owner);
+  }
+}
+
+static void acquire_lock_resources(struct lock *lock) {
+  sema_down(&lock->semaphore);
+  
+  enum intr_level previous_interrupt_state = intr_disable();
+  thread_current()->curr_lock = NULL;
+  list_push_back(&thread_current()->held_lock, &lock->elem);
+  lock->holder = thread_current();
+  intr_set_level(previous_interrupt_state);
+  
+  if (!thread_mlfqs) {
+      update_lock(lock);
+      update_thread_state(thread_current());
+      thread_yield();
+  }
+}
+
+void lock_acquire(struct lock *lock) {
+  ASSERT(lock != NULL);
+  ASSERT(!intr_context());
+  ASSERT(!lock_held_by_current_thread(lock));
 
   if (lock->holder != NULL) {
-    enum intr_level old_level = intr_disable();
-    thread_current()->curr_lock = lock;
-    if (!thread_mlfqs) {
-        int curr = thread_get_priority();
-        struct lock *temporary_lock = lock;
-        struct thread *temp_lock_holder = lock->holder;
-        while (temporary_lock->max_p < curr) {
-            temporary_lock->max_p = curr;
-                update_thread_state(temp_lock_holder);
-            if (temp_lock_holder->status == THREAD_READY) {
-                    sort_ready_queue(temp_lock_holder);
-            }
-
-            temporary_lock = temp_lock_holder->curr_lock;
-            if (temporary_lock == NULL)
-                break;
-            else
-                temp_lock_holder = temporary_lock->holder;
-            ASSERT(temp_lock_holder);
-        }
-    }
-    intr_set_level(old_level);
-}
-  sema_down (&lock->semaphore);
-  enum intr_level old_level = intr_disable ();
-  thread_current ()->curr_lock = NULL;
-  list_push_back (&thread_current ()->held_lock, &lock->elem);
-  lock->holder = thread_current ();
-  intr_set_level (old_level);
-  if (!thread_mlfqs)
-    {
-      update_lock (lock);
-      update_thread_state (thread_current ());
-      thread_yield ();
-	}
+      enum intr_level previous_interrupt_state = intr_disable();
+      thread_current()->curr_lock = lock;
+      
+      if (!thread_mlfqs) {
+          int current_thread_priority = thread_get_priority();
+          propagate_priority(lock, current_thread_priority);
+      }
+      intr_set_level(previous_interrupt_state);
+  }
+  
+  acquire_lock_resources(lock);
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
