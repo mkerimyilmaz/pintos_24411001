@@ -94,9 +94,9 @@
 
 \title{INF333 2023-2024 Spring Semester}
 \author{
-\textbf{\color{blue}{Şirinler}} {\small(your group name, use an appropriate color)}
-\\ Student 1 Name <stu1@gsu.edu.tr>
-\\ Student 2 Name <stu2@gsu.edu.tr>}
+\textbf{\color{blue}{Lone Wolf}} {\small}
+\\ Muhammet Kerim Yılmaz<muhammetkerim.yilmaz2@gsu.edu.tr>
+}
 
 \begin{document}
 
@@ -113,7 +113,6 @@ Please provide answers inline in a \texttt{quote} environment.
 \textbf{Q1:} If you have any preliminary comments on your submission, notes for
 the TAs, or extra credit, please give them here.
 \begin{quote}
-  Answer here
 \end{quote}
 
 
@@ -122,7 +121,10 @@ preparing your submission, other than the Pintos documentation, course text, and
 lecture notes.
 
 \begin{quote}
-  Answer here
+  \begin{itemize}
+    \item https://web.stanford.edu/~ouster/cgi-bin/cs140-spring20/pintos/pintos_1.html
+\end{itemize}
+
 \end{quote}
 
 
@@ -146,7 +148,7 @@ Identify the purpose of each in 25 words or less.
 how it interacts with thread termination.
 
 \begin{quote}
-  Answer here
+   the thread_join function searches for the specified child thread in the parent's list of children. It then acquires the child's latch to ensure the parent waits until the child has finished execution before proceeding
 \end{quote}
 
 \textbf{Q5:} What steps are taken to minimize the amount of time spent in the
@@ -167,21 +169,27 @@ when \texttt{P} terminates without waiting, before \texttt{C} exits?  After
 \texttt{C} exits?  Are there any special cases?
 
 \begin{quote}
-  Answer here
+To ensure synchronization and prevent race conditions:
+
+    P calls wait(C) before C exits → P locks C, waits on a condition variable, and releases the lock when C signals its exit.
+    P calls wait(C) after C exits → P directly cleans up C’s resources after acquiring a lock.
+    P terminates before wait(C), while C is running → C becomes an orphan; the kernel handles cleanup after C exits.
+    P terminates after C exits → If P hasn’t waited, C’s resources are freed when P exits.
+
+Proper locking and cleanup prevent resource leaks and race conditions.
 \end{quote}
 
 \textbf{Q7:} How are race conditions avoided when multiple threads call
 \texttt{timer\_sleep()} simultaneously?
 
 \begin{quote}
-  Answer here
-\end{quote}
+disabling interrupts during list operations. This ensures atomic updates, prevents interference, and maintains a consistent sleep list.\end{quote}
 
 \textbf{Q8:} How are race conditions avoided when a timer interrupt occurs
 during a call to \texttt{timer\_sleep()}?
 
 \begin{quote}
-  Answer here
+Race conditions in timer_sleep() are avoided by disabling interrupts during list operations. This ensures that sleep list modifications are atomic, preventing concurrent access issues. It also guarantees a consistent state and prevents unexpected rescheduling while a thread is being added or removed.
 \end{quote}
 
 
@@ -191,7 +199,15 @@ during a call to \texttt{timer\_sleep()}?
 your design choices.
 
 \begin{quote}
-  Answer here
+  Advantages:\\
+    Prevents Race Conditions: Disabling interrupts ensures that multiple threads don’t interfere with each other.
+    Good Synchronization: Using locks and condition variables avoids busy-waiting and improves CPU efficiency.
+    Proper Resource Cleanup: The parent thread waits for the child and cleans up resources, preventing memory leaks.\\
+Disadvantages:\\
+    Too Much Locking: Frequent locks might slow down performance when many threads are active.
+    Priority Issues: Lower-priority threads might be delayed if high-priority threads keep running.
+    Complex Cleanup: If thread_join is not handled well, some thread resources might not be freed properly.
+    
 \end{quote}
 
 
@@ -206,7 +222,13 @@ your design choices.
 the purpose of each in 25 words or less
 
 \begin{quote}
-  Answer here
+  -sleeping_list\\
+  -propagate_priority\\
+  -lock_acquire\\
+  -priority\\
+  -compare_locks\\
+  -compara_sema_elems\\
+  
 \end{quote}
 
 \textbf{Q11:} Describe the sequence of events when a call to
@@ -214,14 +236,23 @@ the purpose of each in 25 words or less
 handled?
 
 \begin{quote}
-  Answer here
+  When a thread waits for a lock in \texttt{lock\_acquire()}, it checks if its priority is higher than the lock holder’s effective priority.  
+If so, the function \texttt{set\_effective\_priority()} updates the lock holder’s priority to match the waiting thread’s priority.
+
+To handle nested donation, \texttt{set\_effective\_priority()} recursively updates priorities through the lock-thread chain.  
+If the lock holder is also waiting for another lock, the priority update continues to ensure correct donation.
 \end{quote}
 
 \textbf{Q12:} Describe the sequence of events when \texttt{lock\_release()} is
 called on a lock that a higher-priority thread is waiting for.
 
 \begin{quote}
-  Answer here
+ \begin{itemize}
+    \item Remove the lock from the thread’s held locks list.
+    \item Recalculate effective priority as the maximum of the thread’s original priority and remaining donations.
+    \item Unblock the highest-priority waiting thread and grant it the lock.
+    \item If the unblocked thread has higher priority, trigger a context switch.
+\end{itemize}
 \end{quote}
 
 \subsection{Synchronization}
@@ -231,7 +262,11 @@ explain how your implementation avoids it. Can you use a lock to avoid this
 race?
 
 \begin{quote}
-  Answer here
+  \begin{itemize}
+    \item A thread setting its priority may override an active priority donation.
+    \item Disabling interrupts prevents race conditions by ensuring atomic updates.
+    \item Using locks could cause deadlocks due to interactions with priority donation.
+\end{itemize}
 \end{quote}
 
 \subsection{Rationale}
@@ -240,7 +275,11 @@ race?
 another design you considered?
 
 \begin{quote}
-  Answer here
+  \begin{itemize}
+    \item Maintaining sorted wait lists was complex and unnecessary.
+    \item Selecting the highest-priority thread at scheduling time is simpler and faster.
+    \item Sorting adds overhead (\texttt{O(n log n)}), while linear selection (\texttt{O(n)}) is more efficient.
+\end{itemize}
 \end{quote}
 
 \section{Advanced Scheduler}
