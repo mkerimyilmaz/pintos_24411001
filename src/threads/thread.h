@@ -4,6 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include "fixed_point.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -26,8 +27,7 @@ typedef int tid_t;
 
 /* A kernel thread or user process.
 
-   Each thread // while (timer_elapsed (start) < ticks)
-  //   thread_yield ();structure is stored in its own 4 kB page.  The
+   Each thread structure is stored in its own 4 kB page.  The
    thread structure itself sits at the very bottom of the page
    (at offset 0).  The rest of the page is reserved for the
    thread's kernel stack, which grows downward from the top of
@@ -81,6 +81,7 @@ typedef int tid_t;
    only because they are mutually exclusive: only a thread in the
    ready state is on the run queue, whereas only a thread in the
    blocked state is on a semaphore wait list. */
+extern bool thread_mlfqs;
 struct thread
   {
     /* Owned by thread.c. */
@@ -105,6 +106,13 @@ struct thread
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
+	struct list_elem sleep_element;
+    	struct list held_lock;
+	struct lock *curr_lock;       
+	int our_priority;                   
+	int nice;
+    int64_t remaining_time;
+   constant_point last_cpu_retrieved;                   
   };
 
 /* If false (default), use round-robin scheduler.
@@ -142,8 +150,19 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+void evaluate_thread_yield (void);
+void process_tick_event (void);
+void schedule_thread_sleep (int64_t);
+void update_thread_state (struct thread *);
+void sort_ready_queue (struct thread *);
+void compute_thread_cpu_usage (struct thread *, void *);
+void recalculate_mlfqs_priority (struct thread *);
+bool priority_ordering_comparator (const struct list_elem *, const struct list_elem *, void *);
+
+//todo
 bool check_priority(struct list_elem *l1, struct list_elem *l2, void *aux);
 
+bool thread_priority_compare(const struct list_elem *, const struct list_elem *, void *);
 
 
 #endif /* threads/thread.h */

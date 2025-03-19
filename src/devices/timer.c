@@ -99,11 +99,17 @@ timer_elapsed (int64_t then)
 void
 timer_sleep (int64_t ticks)
 {
+  if (ticks <= 0)
+  return;
+
   int64_t start = timer_ticks ();
 
   ASSERT (intr_get_level () == INTR_ON);
 
-  timer_wait(start + ticks);
+  //timer_wait(start + ticks); todo
+  intr_disable ();
+  schedule_thread_sleep (ticks);
+  intr_set_level (INTR_ON);
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -235,6 +241,8 @@ static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
+  if (thread_mlfqs && ticks % TIMER_FREQ == 0)
+    process_tick_event ();
   thread_tick ();
   // New
   timer_wakeup();
