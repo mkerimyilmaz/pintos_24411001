@@ -1,0 +1,283 @@
+\documentclass[a4paper,11pt]{paper}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[margin=3.2cm]{geometry}
+\usepackage{enumitem}
+\usepackage{CJKutf8}
+\usepackage[colorlinks=true,urlcolor=blue,linkcolor=black]{hyperref}
+\usepackage{mathtools}
+\usepackage{listings}
+\usepackage{fancyvrb}
+\usepackage{enumitem}
+\usepackage{tikz}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{amsmath}
+\usepackage{calc}
+\usepackage{relsize}
+\usepackage{emoji}  % lualatex
+\usepackage{fontawesome}  % lualatex
+\usepackage{fancyvrb}
+
+\usepackage{lastpage}
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{} % clear existing header/footer entries
+% Place Page X of Y on the right-hand
+% side of the footer
+\fancyfoot[R]{Page \thepage \hspace{1pt} of \pageref{LastPage}}
+
+\usetikzlibrary{calc,shapes.multipart,chains,arrows}
+
+\renewcommand*{\theenumi}{\thesection.\arabic{enumi}}
+\renewcommand*{\theenumii}{\theenumi.\arabic{enumii}}
+\let\orighref\href
+\renewcommand{\href}[2]{\orighref{#1}{#2\,\smaller[4]\faExternalLink}}
+
+\let\Red=\alert
+\definecolor{few-gray-bright}{HTML}{010202}
+\definecolor{few-red-bright}{HTML}{EE2E2F}
+\definecolor{few-green-bright}{HTML}{008C48}
+\definecolor{few-blue-bright}{HTML}{185AA9}
+\definecolor{few-orange-bright}{HTML}{F47D23}
+\definecolor{few-purple-bright}{HTML}{662C91}
+\definecolor{few-brown-bright}{HTML}{A21D21}
+\definecolor{few-pink-bright}{HTML}{B43894}
+
+\definecolor{few-gray}{HTML}{737373}
+\definecolor{few-red}{HTML}{F15A60}
+\definecolor{few-green}{HTML}{7AC36A}
+\definecolor{few-blue}{HTML}{5A9BD4}
+\definecolor{few-orange}{HTML}{FAA75B}
+\definecolor{few-purple}{HTML}{9E67AB}
+\definecolor{few-brown}{HTML}{CE7058}
+\definecolor{few-pink}{HTML}{D77FB4}
+
+\definecolor{few-gray-light}{HTML}{CCCCCC}
+\definecolor{few-red-light}{HTML}{F2AFAD}
+\definecolor{few-green-light}{HTML}{D9E4AA}
+\definecolor{few-blue-light}{HTML}{B8D2EC}
+\definecolor{few-orange-light}{HTML}{F3D1B0}
+\definecolor{few-purple-light}{HTML}{D5B2D4}
+\definecolor{few-brown-light}{HTML}{DDB9A9}
+\definecolor{few-pink-light}{HTML}{EBC0DA}
+
+\colorlet{alert-color}{few-red-bright!80!black}
+\colorlet{comment}{few-blue-bright}
+\colorlet{string}{few-green-bright}
+
+\lstdefinestyle{ccode}{
+    showstringspaces=false,
+    stringstyle={\ttfamily\color{string}},
+    language=C,escapeinside=`',columns=flexible,commentstyle=\color{comment},
+    basicstyle=\ttfamily,
+    classoffset=2, keywordstyle=\color{alert-color}
+}
+
+\lstnewenvironment{ccode}[1][]%
+    {\lstset{style=ccode,basicstyle=\ttfamily\openup-.17\baselineskip,#1}}%
+    {}
+
+\lstset{
+  basicstyle=\itshape,
+  xleftmargin=3em,
+  literate={->}{$\rightarrow$}{2}
+           {α}{$\alpha$}{1}
+           {δ}{$\delta$}{1}
+           {ε}{$\epsilon$}{1}
+}
+
+\renewcommand{\baselinestretch}{1.1}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{1em}
+
+\title{INF333 2023-2024 Spring Semester}
+\author{
+\textbf{\color{blue}{Şirinler}} {\small(your group name, use an appropriate color)}
+\\ Student 1 Name <stu1@gsu.edu.tr>
+\\ Student 2 Name <stu2@gsu.edu.tr>}
+
+\begin{document}
+
+\maketitle
+
+\section*{\LARGE Homework III \\
+Design Document}
+
+Please provide answers inline in a \texttt{quote} environment.
+
+
+\section{Preliminaries}
+
+\textbf{Q1:} If you have any preliminary comments on your submission, notes for the TAs, or extra credit, please give them here.
+\begin{quote}
+  Answer here
+\end{quote}
+
+
+\textbf{Q2:} Please cite any offline or online sources you consulted while preparing your
+submission, other than the Pintos documentation, course text, and lecture notes.
+\begin{quote}
+  Answer here
+\end{quote}
+
+\section{Page Table Management}
+
+\subsection{Data Structures}
+\textbf{Q3:} Copy here the declaration of each new or changed `struct' or `struct' member, global or static variable, `typedef', or enumeration.
+
+Identify the purpose of each in 25 words or less.
+\begin{quote}
+  Answer here
+\end{quote}
+
+\subsection{Algorithms}
+
+\textbf{Q4:} In a few paragraphs, describe your code for accessing the data
+stored in the SPT about a given page.
+
+\begin{quote}
+  Answer here
+\end{quote}
+
+\textbf{Q5:} How does your code coordinate accessed and dirty bits between kernel and user virtual addresses that alias a single frame, or alternatively how do you avoid the issue?
+\begin{quote}
+  Answer here
+\end{quote}
+
+\subsection{Synchronization}
+
+\textbf{Q6:} When two user processes both need a new frame at the same time, how are races avoided?
+
+\begin{quote}
+  Answer here
+\end{quote}
+
+\subsection{Rationale}
+\textbf{Q7:} Why did you choose the data structure(s) that you did for representing virtual-to-physical mappings?
+
+\begin{quote}
+  Answer here
+\end{quote}
+
+
+\section{Paging to and from Disk}
+
+\textbf{Q8:} Copy here the declaration of each new or changed `struct' or `struct' member, global or static variable, `typedef', or enumeration.  Identify the purpose of each in 25 words or less.
+\begin{quote}
+  Answer here
+\end{quote}
+
+\pagebreak
+
+\subsection{Algorithms}
+
+\textbf{Q9:} When a frame is required but none is free, some frame must be evicted.  Describe your code for choosing a frame to evict.
+\begin{quote}
+  Answer here
+\end{quote}
+
+
+\textbf{Q10:} When a process P obtains a frame that was previously used by a process Q, how do you adjust the page table (and any other data structures) to reflect the frame Q no longer has?
+\begin{quote}
+  Answer here
+\end{quote}
+
+\textbf{Q11:} Explain your heuristic for deciding whether a page fault for an invalid virtual address should cause the stack to be extended into the page that faulted.
+\begin{quote}
+  Answer here
+\end{quote}
+
+\subsection{Synchronization}
+
+\textbf{Q12:} Explain the basics of your VM synchronization design.  In particular, explain how it prevents deadlock.  (Refer to the textbook for an explanation of the necessary conditions for deadlock.)
+\begin{quote}
+  Answer here
+\end{quote}
+
+\textbf{Q13:} A page fault in process P can cause another process Q's frame to be evicted. How do you ensure that Q cannot access or modify the page during the eviction process?  How do you avoid a race between P evicting Q's frame and Q faulting the page back in?
+\begin{quote}
+  Answer here
+\end{quote}
+
+\textbf{Q14:} Suppose a page fault in process P causes a page to be read from the file system or swap.  How do you ensure that a second process Q cannot interfere by e.g. attempting to evict the frame while it is still being read in?
+\begin{quote}
+  Answer here
+\end{quote}
+
+\textbf{Q15:} Explain how you handle access to paged-out pages that occur during system calls.  Do you use page faults to bring in pages (as in user programs), or do you have a mechanism for "locking" frames into physical memory, or do you use some other design?  How do you gracefully handle attempted accesses to invalid virtual addresses?
+\begin{quote}
+  Answer here
+\end{quote}
+
+\subsection{Rationale}
+
+\textbf{Q16:} A single lock for the whole VM system would make synchronization easy, but limit parallelism.  On the other hand, using many locks complicates synchronization and raises the possibility for deadlock but allows for high parallelism.  Explain where your design falls along this continuum and why you chose to design it this way.
+\begin{quote}
+  Answer here
+\end{quote}
+
+
+\section{Memory Mapped Files}
+
+\subsection{Data Structures}
+
+\textbf{Q17:} Copy here the declaration of each new or changed `struct' or `struct' member, global or static variable, `typedef', or enumeration.  Identify the purpose of each in 25 words or less.
+\begin{quote}
+  Answer here
+\end{quote}
+
+\subsection{Algorithms}
+
+\textbf{Q18:} Describe how memory mapped files integrate into your virtual memory subsystem.  Explain how the page fault and eviction processes differ between swap pages and other pages.
+\begin{quote}
+  Answer here
+\end{quote}
+
+\textbf{Q19:} Explain how you determine whether a new file mapping overlaps any existing segment.
+\begin{quote}
+  Answer here
+\end{quote}
+
+\subsection{Rationale}
+\textbf{Q20:} Mappings created with "mmap" have similar semantics to those of data demand-paged from executables, except that "mmap" mappings are written back to their original files, not to swap.  This implies that much of their implementation can be shared.  Explain why your implementation either does or does not share much of the code for the two situations.
+
+\begin{quote}
+  Answer here
+\end{quote}
+
+
+
+
+\section{Survey Questions}
+
+Answering these questions is optional, but it will help us improve the course in future quarters.  Feel free to tell us anything you want--these questions are just to spur your thoughts.  You may also choose to respond anonymously in the course evaluations at the end of the quarter.
+
+\textbf{Q1:} In your opinion, was this assignment, or any one of the three problems in it, too easy or too hard?  Did it take too long or too little time?
+\begin{quote}
+  Answer here
+\end{quote}
+
+\textbf{Q2:} Did you find that working on a particular part of the assignment gave you greater insight into some aspect of OS design?
+\begin{quote}
+  Answer here
+\end{quote}
+
+\textbf{Q3:} Is there some particular fact or hint we should give students in future quarters to help them solve the problems?  Conversely, did you find any of our guidance to be misleading?
+\begin{quote}
+  Answer here
+\end{quote}
+
+\textbf{Q4:} Do you have any suggestions for the TAs to more effectively assist students, either for future quarters or the remaining projects?
+\begin{quote}
+  Answer here
+\end{quote}
+
+\textbf{Q5:} Any other comments?
+\begin{quote}
+  Answer here
+\end{quote}
+
+
+\end{document}

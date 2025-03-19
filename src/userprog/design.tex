@@ -1,0 +1,262 @@
+\documentclass[a4paper,11pt]{paper}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[margin=3.2cm]{geometry}
+\usepackage{enumitem}
+\usepackage{CJKutf8}
+\usepackage[colorlinks=true,urlcolor=blue,linkcolor=black]{hyperref}
+\usepackage{mathtools}
+\usepackage{listings}
+\usepackage{fancyvrb}
+\usepackage{enumitem}
+\usepackage{tikz}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{amsmath}
+\usepackage{calc}
+\usepackage{relsize}
+\usepackage{emoji}  % lualatex
+\usepackage{fontawesome}  % lualatex
+\usepackage{fancyvrb}
+
+\usepackage{lastpage}
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{} % clear existing header/footer entries
+% Place Page X of Y on the right-hand
+% side of the footer
+\fancyfoot[R]{Page \thepage \hspace{1pt} of \pageref{LastPage}}
+
+\usetikzlibrary{calc,shapes.multipart,chains,arrows}
+
+\renewcommand*{\theenumi}{\thesection.\arabic{enumi}}
+\renewcommand*{\theenumii}{\theenumi.\arabic{enumii}}
+\let\orighref\href
+\renewcommand{\href}[2]{\orighref{#1}{#2\,\smaller[4]\faExternalLink}}
+
+\let\Red=\alert
+\definecolor{few-gray-bright}{HTML}{010202}
+\definecolor{few-red-bright}{HTML}{EE2E2F}
+\definecolor{few-green-bright}{HTML}{008C48}
+\definecolor{few-blue-bright}{HTML}{185AA9}
+\definecolor{few-orange-bright}{HTML}{F47D23}
+\definecolor{few-purple-bright}{HTML}{662C91}
+\definecolor{few-brown-bright}{HTML}{A21D21}
+\definecolor{few-pink-bright}{HTML}{B43894}
+
+\definecolor{few-gray}{HTML}{737373}
+\definecolor{few-red}{HTML}{F15A60}
+\definecolor{few-green}{HTML}{7AC36A}
+\definecolor{few-blue}{HTML}{5A9BD4}
+\definecolor{few-orange}{HTML}{FAA75B}
+\definecolor{few-purple}{HTML}{9E67AB}
+\definecolor{few-brown}{HTML}{CE7058}
+\definecolor{few-pink}{HTML}{D77FB4}
+
+\definecolor{few-gray-light}{HTML}{CCCCCC}
+\definecolor{few-red-light}{HTML}{F2AFAD}
+\definecolor{few-green-light}{HTML}{D9E4AA}
+\definecolor{few-blue-light}{HTML}{B8D2EC}
+\definecolor{few-orange-light}{HTML}{F3D1B0}
+\definecolor{few-purple-light}{HTML}{D5B2D4}
+\definecolor{few-brown-light}{HTML}{DDB9A9}
+\definecolor{few-pink-light}{HTML}{EBC0DA}
+
+\colorlet{alert-color}{few-red-bright!80!black}
+\colorlet{comment}{few-blue-bright}
+\colorlet{string}{few-green-bright}
+
+\lstdefinestyle{ccode}{
+    showstringspaces=false,
+    stringstyle={\ttfamily\color{string}},
+    language=C,escapeinside=`',columns=flexible,commentstyle=\color{comment},
+    basicstyle=\ttfamily,
+    classoffset=2, keywordstyle=\color{alert-color}
+}
+
+\lstnewenvironment{ccode}[1][]%
+    {\lstset{style=ccode,basicstyle=\ttfamily\openup-.17\baselineskip,#1}}%
+    {}
+
+\lstset{
+  basicstyle=\itshape,
+  xleftmargin=3em,
+  literate={->}{$\rightarrow$}{2}
+           {α}{$\alpha$}{1}
+           {δ}{$\delta$}{1}
+           {ε}{$\epsilon$}{1}
+}
+
+\renewcommand{\baselinestretch}{1.1}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{1em}
+
+\title{INF333 2023-2024 Spring Semester}
+\author{
+\textbf{\color{blue}{Şirinler}} {\small(your group name, use an appropriate color)}
+\\ Student 1 Name <stu1@gsu.edu.tr>
+\\ Student 2 Name <stu2@gsu.edu.tr>}
+
+\begin{document}
+
+\maketitle
+
+\section*{\LARGE Homework II \\
+  Design Document}
+
+Please provide answers inline in a \texttt{quote} environment.
+
+
+\section{Preliminaries}
+
+\textbf{Q1:} If you have any preliminary comments on your submission, notes for the TAs, or extra credit, please give them here.
+\begin{quote}
+  Answer here
+\end{quote}
+
+
+\textbf{Q2:} Please cite any offline or online sources you consulted while preparing your
+submission, other than the Pintos documentation, course text, and lecture notes.
+\begin{quote}
+  Answer here
+\end{quote}
+
+
+\section{Argument Passing}
+
+\subsection{Data Structures}
+
+\textbf{Q3:} Copy here the declaration of each new or changed `struct' or `struct' member, global or static variable, `typedef', or enumeration.
+
+Identify the purpose of each in 25 words or less.
+\begin{quote}
+  Answer here
+\end{quote}
+
+
+\subsection{Algorithms}
+
+
+\textbf{Q4:} Briefly describe how you implemented argument parsing.  How do you arrange for the elements of \texttt{argv[]} to be in the right order? How do you avoid overflowing the stack page?
+
+\begin{quote}
+  Answer here
+\end{quote}
+
+\subsection{Rationale}
+
+\textbf{Q5:} Why does Pintos implement \texttt{strtok\_r()} but not \texttt{strtok()}?
+\begin{quote}
+  Answer here
+\end{quote}
+
+\textbf{Q6:} In Pintos, the kernel separates commands into an executable name and arguments.  In Unix-like systems, the shell does this separation.  Identify at least two advantages of the Unix approach.
+\begin{quote}
+  Answer here
+\end{quote}
+
+
+\section{System Calls}
+
+\subsection{Data Structures}
+
+\textbf{Q7:} Copy here the declaration of each new or changed `struct' or `struct' member, global or static variable, `typedef', or enumeration.  Identify the purpose of each in 25 words or less
+\begin{quote}
+  Answer here
+\end{quote}
+
+\textbf{Q8:} Describe how file descriptors are associated with open files. Are file descriptors unique within the entire OS or just within a single process?
+\begin{quote}
+  Answer here
+\end{quote}
+
+\textbf{Q9:} Describe the sequence of events when \texttt{lock\_release()} is called on a lock that a higher-priority thread is waiting for.
+\begin{quote}
+  Answer here
+\end{quote}
+
+\subsection{Algorithms}
+
+\textbf{Q10:} Describe your code for reading and writing user data from the kernel.
+\begin{quote}
+  Answer here
+\end{quote}
+
+\textbf{Q11:} Suppose a system call causes a full page (4,096 bytes) of data to be copied from user space into the kernel.  What is the least and the greatest possible number of inspections of the page table (e.g. calls to \texttt{pagedir\_get\_page())} that might result?  What about for a system call that only copies 2 bytes of data?  Is there room for improvement in these numbers, and how much?
+\begin{quote}
+  Answer here
+\end{quote}
+
+\textbf{Q12:} Briefly describe your implementation of the "wait" system call and how it interacts with process termination.
+\begin{quote}
+  Answer here
+\end{quote}
+
+\textbf{Q13:} Any access to user program memory at a user-specified address can fail due to a bad pointer value.  Such accesses must cause the process to be terminated.  System calls are fraught with such accesses, e.g. a "write" system call requires reading the system call number from the user stack, then each of the call's three arguments, then an arbitrary amount of user memory, and any of these can fail at any point.  This poses a design and error-handling problem: how do you best avoid obscuring the primary function of code in a morass of error-handling?  Furthermore, when an error is detected, how do you ensure that all temporarily allocated resources (locks, buffers, etc.) are freed?  In a few paragraphs, describe the strategy or strategies you adopted for managing these issues.  Give an example.
+\begin{quote}
+  Answer here
+\end{quote}
+
+\subsection{Synchronization}
+
+\textbf{Q14:} The "exec" system call returns -1 if loading the new executable fails, so it cannot return before the new executable has completed loading.  How does your code ensure this?  How is the load success/failure status passed back to the thread that calls "exec"?
+\begin{quote}
+  Answer here
+\end{quote}
+
+\textbf{Q15:} Consider parent process P with child process C.  How do you ensure proper synchronization and avoid race conditions when P calls wait(C) before C exits?  After C exits?  How do you ensure that all resources are freed in each case? How about when P terminates without waiting, before C exits?  After C exits?  Are there any special cases?
+\begin{quote}
+  Answer here
+\end{quote}
+
+\subsection{Rationale}
+
+\textbf{Q16:} Why did you choose to implement access to user memory from the kernel in the way that you did?
+\begin{quote}
+  Answer here
+\end{quote}
+
+\textbf{Q17:} What advantages or disadvantages can you see to your design for file descriptors?
+\begin{quote}
+  Answer here
+\end{quote}
+
+\textbf{Q18:} The default \texttt{tid\_t} to \texttt{pid\_t} mapping is the identity mapping. If you changed it, what advantages are there to your approach?
+\begin{quote}
+  Answer here
+\end{quote}
+
+
+\section{Survey Questions}
+
+Answering these questions is optional, but it will help us improve the course in future quarters.  Feel free to tell us anything you want--these questions are just to spur your thoughts.  You may also choose to respond anonymously in the course evaluations at the end of the quarter.
+
+\textbf{Q1:} In your opinion, was this assignment, or any one of the three problems in it, too easy or too hard?  Did it take too long or too little time?
+\begin{quote}
+  Answer here
+\end{quote}
+
+\textbf{Q2:} Did you find that working on a particular part of the assignment gave you greater insight into some aspect of OS design?
+\begin{quote}
+  Answer here
+\end{quote}
+
+\textbf{Q3:} Is there some particular fact or hint we should give students in future quarters to help them solve the problems?  Conversely, did you find any of our guidance to be misleading?
+\begin{quote}
+  Answer here
+\end{quote}
+
+\textbf{Q4:} Do you have any suggestions for us to more effectively assist students,
+either for future semesters or the remaining projects?
+\begin{quote}
+  Answer here
+\end{quote}
+
+\textbf{Q5:} Any other comments?
+\begin{quote}
+  Answer here
+\end{quote}
+
+
+\end{document}

@@ -292,6 +292,9 @@ run_task (char **argv)
   printf ("Execution of '%s' complete.\n", task);
 }
 
+void print_hello(char **argv) {
+  printf("Hello World!\n");
+}
 /* Executes all of the actions specified in ARGV[]
    up to the null pointer sentinel. */
 static void
@@ -316,9 +319,14 @@ run_actions (char **argv)
       {"extract", 1, fsutil_extract},
       {"append", 2, fsutil_append},
 #endif
+      {"hello", 1, print_hello},
       {NULL, 0, NULL},
     };
-
+  /* If no arguments are passed, call the hello_world function. */
+  if (*argv == NULL) {
+    print_hello(argv);
+    return;
+  }
   while (*argv != NULL)
     {
       const struct action *a;
