@@ -89,6 +89,7 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
+  while(1);//todo kerim ileride değiştimemiz gerekecek
   return -1;
 }
 
@@ -450,7 +451,6 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
        uint8_t *kernel_page;
        bool status = false;
    
-       // Kullanıcı için boş, sıfırlanmış bir bellek sayfası al
        kernel_page = palloc_get_page(PAL_USER | PAL_ZERO);
        if (kernel_page != NULL) 
        {
