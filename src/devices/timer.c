@@ -24,12 +24,6 @@ static int64_t ticks;
    Initialized by timer_calibrate(). */
 static unsigned loops_per_tick;
 
-
-
-// New
-static struct list timer_wait_list;
-
-
 static intr_handler_func timer_interrupt;
 static bool too_many_loops (unsigned loops);
 static void busy_wait (int64_t loops);
@@ -44,9 +38,6 @@ timer_init (void)
 
   pit_configure_channel (0, 2, TIMER_FREQ);
   intr_register_ext (0x20, timer_interrupt, "8254 Timer");
-
-  // New
-  list_init(&timer_wait_list);
 }
 
 /* Calibrates loops_per_tick, used to implement brief delays. */
@@ -99,17 +90,14 @@ timer_elapsed (int64_t then)
 void
 timer_sleep (int64_t ticks)
 {
-  if (ticks <= 0) //Belki bunu silebilirim :todo
+  if (ticks <= 0){
   return;
+  }
+  ASSERT (intr_get_level () == INTR_ON);
 
   int64_t start = timer_ticks ();
 
-  ASSERT (intr_get_level () == INTR_ON);
-
-  //timer_wait(start + ticks); todo
-  intr_disable ();
-  schedule_thread_sleep (ticks);
-  intr_set_level (INTR_ON);
+  thread_sleep(start + ticks);
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -143,56 +131,6 @@ timer_nsleep (int64_t ns)
    interrupts off for the interval between timer ticks or longer
    will cause timer ticks to be lost.  Thus, use timer_msleep()
    instead if interrupts are enabled. */
-
-// TODO
-static bool tick_less (const struct list_elem *elem_a, const struct list_elem *elem_b, void *auxiliary) {
-  ASSERT (elem_a != NULL);
-  ASSERT (elem_b != NULL);
-  struct thread *thread_a = list_entry (elem_a, struct thread, elem);
-  struct thread *thread_b = list_entry (elem_b, struct thread, elem);
-  return thread_a->waking_up_time < thread_b->waking_up_time;
-}
-
-// TODO
-void timer_wait (int64_t delay_ticks) {
-  if (delay_ticks <= 0)
-    return;
-
-  struct thread *current_thread = thread_current();
-  if (current_thread == NULL)
-    return;
-
-  enum intr_level previous_level = intr_disable();
-  current_thread->waking_up_time = delay_ticks;
-  list_insert_ordered(&timer_wait_list, &current_thread->elem, tick_less, NULL);
-  thread_block();
-  intr_set_level(previous_level);
-}
-
-// TODO
-void timer_wakeup() {
-  struct list_elem *current_elem, *next_elem;
-  struct thread *thread_ptr;
-
-  if (list_empty(&timer_wait_list))
-    return;
-
-  current_elem = list_begin(&timer_wait_list);
-  while (current_elem != list_end(&timer_wait_list)) {
-    next_elem = list_next(current_elem);
-    thread_ptr = list_entry(current_elem, struct thread, elem);
-    if (thread_ptr == NULL || thread_ptr->waking_up_time > timer_ticks())
-      break;
-
-    enum intr_level previous_level = intr_disable();
-    list_remove(current_elem);
-    thread_unblock(thread_ptr);
-    intr_set_level(previous_level);
-    current_elem = next_elem;
-  }
-}
-
-
 void
 timer_mdelay (int64_t ms)
 {
@@ -237,11 +175,7 @@ static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
-  if (thread_mlfqs && ticks % TIMER_FREQ == 0)
-    process_tick_event ();
-  thread_tick ();
-  // New
-  timer_wakeup();
+  thread_tick (ticks);
 }
 
 
