@@ -228,10 +228,12 @@ load (const char *file_name, void (**eip) (void), void **esp)
   char *arguments[MAX_ARG_COUNT];
   arguments[0] = strtok_r(file_name, seperator, &file_name);
 
+
   char *value;
   i = 1;
   while (value = strtok_r(file_name, seperator, &file_name))
   {
+    printf("argc: %d\n", value);
     arguments[i] = value;
     i++;
     if (i >= MAX_ARG_COUNT)
