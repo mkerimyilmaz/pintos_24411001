@@ -18,6 +18,7 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
+#define MAX_ARG_COUNT 12 //todo kerim check here if it is sufficient
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
@@ -88,6 +89,7 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
+  while(1);//todo kerim ileride değiştimemiz gerekecek
   return -1;
 }
 
@@ -195,7 +197,7 @@ struct Elf32_Phdr
 #define PF_W 2          /* Writable. */
 #define PF_R 4          /* Readable. */
 
-static bool setup_stack (void **esp);
+bool setup_stack(void **stack_ptr, const char **argument_vector, int argument_count) ;
 static bool validate_segment (const struct Elf32_Phdr *, struct file *);
 static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
                           uint32_t read_bytes, uint32_t zero_bytes,
@@ -220,9 +222,29 @@ load (const char *file_name, void (**eip) (void), void **esp)
   if (t->pagedir == NULL) 
     goto done;
   process_activate ();
+  
+  
+  char seperator = " ";
+  char *arguments[MAX_ARG_COUNT];
+  arguments[0] = strtok_r(file_name, seperator, &file_name);
+
+
+  char *value;
+  i = 1;
+  while (value = strtok_r(file_name, seperator, &file_name))
+  {
+    printf("argc: %d\n", value);
+    arguments[i] = value;
+    i++;
+    if (i >= MAX_ARG_COUNT)
+      break;
+  }
+  
+  
+  
 
   /* Open executable file. */
-  file = filesys_open (file_name);
+  file = filesys_open (arguments[0]);
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", file_name);
@@ -302,7 +324,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
     }
 
   /* Set up stack. */
-  if (!setup_stack (esp))
+  if (!setup_stack (esp, arguments, i))
     goto done;
 
   /* Start address. */
@@ -426,23 +448,79 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
-static bool
-setup_stack (void **esp) 
-{
-  uint8_t *kpage;
-  bool success = false;
+   bool setup_stack(void **stack_ptr, const char **argument_vector, int argument_count) 
+   {
+       uint8_t *kernel_page;
+       bool status = false;
+   
+       kernel_page = palloc_get_page(PAL_USER | PAL_ZERO);
+       if (kernel_page != NULL) 
+       {
+           status = install_page(((uint8_t *)PHYS_BASE) - PGSIZE, kernel_page, true);
+           if (status)
+               *stack_ptr = PHYS_BASE;
+           else
+               palloc_free_page(kernel_page);
+       }
+   
+       int idx = argument_count - 1;
+       uint32_t last_argument_addr; 
+       uintptr_t original_stack;
+       uint32_t first_argument_addr; 
+       int total_bytes = 0;          
+       original_stack = (uintptr_t)*stack_ptr;
 
-  kpage = palloc_get_page (PAL_USER | PAL_ZERO);
-  if (kpage != NULL) 
-    {
-      success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
-      if (success)
-        *esp = PHYS_BASE;
-      else
-        palloc_free_page (kpage);
-    }
-  return success;
-}
+       while (idx >= 0)
+       {
+           *stack_ptr = (void *)((char *)*stack_ptr - strlen(argument_vector[idx]) - 1);
+           total_bytes += strlen(argument_vector[idx]) * sizeof(char) + 1;
+           memcpy(*stack_ptr, argument_vector[idx], strlen(argument_vector[idx]) + 1);
+           if (idx == argument_count - 1)
+               last_argument_addr = (uintptr_t)*stack_ptr;
+           if (idx == 0)
+               first_argument_addr = (uintptr_t)*stack_ptr;
+           idx--;
+       }
+       hex_dump((uintptr_t)*stack_ptr, *stack_ptr, total_bytes, 1);
+   
+       // Yığın adresini 4 bayta hizala
+       uintptr_t alignment = (uintptr_t)*stack_ptr;
+       if (alignment % 4 != 0)
+           *stack_ptr = (void *)((char *)*stack_ptr - (alignment % 4));
+       total_bytes += alignment % 4;
+       // TODO: Kerim bak - hizalama kontrolü sağlıklı mı 
+   
+       idx = argument_count - 1;
+       *stack_ptr = (void *)((char *)*stack_ptr - sizeof(char *));
+       total_bytes += sizeof(char *);
+       memset(*stack_ptr, 0, 4);
+   
+       while (idx >= 0)
+       {
+           *stack_ptr = (void *)((char *)*stack_ptr - sizeof(char *));
+           total_bytes += sizeof(char *);
+           *((char **)*stack_ptr) = (char *)last_argument_addr;
+           if (idx != 0)
+               last_argument_addr = (uintptr_t)((char *)last_argument_addr - strlen(argument_vector[idx - 1]) - 1);
+           first_argument_addr = (uintptr_t)*stack_ptr;
+           idx--;
+       }
+       *stack_ptr = (void *)((char *)*stack_ptr - sizeof(char **));
+       total_bytes += sizeof(char **);
+       *((char *** )*stack_ptr) = (char **)first_argument_addr;
+   
+       *stack_ptr = (void *)((char *)*stack_ptr - sizeof(int));
+       total_bytes += sizeof(int);
+       *((int *)*stack_ptr) = argument_count;
+   
+       *stack_ptr = (void *)((char *)*stack_ptr - sizeof(void *));
+       total_bytes += sizeof(void *);
+       *((void **)*stack_ptr) = NULL;
+   
+       hex_dump((uintptr_t)*stack_ptr, *stack_ptr, total_bytes, 1);
+       return status;
+   }
+   
 
 /* Adds a mapping from user virtual address UPAGE to kernel
    virtual address KPAGE to the page table.
