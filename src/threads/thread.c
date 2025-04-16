@@ -24,6 +24,8 @@
    that are ready to run but not actually running. */
 static struct list ready_list;
 
+
+
 /* List of all processes.  Processes are added to this list
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
@@ -36,6 +38,9 @@ static struct thread *initial_thread;
 
 /* Lock used by allocate_tid(). */
 static struct lock tid_lock;
+
+
+static struct list threads_list;
 
 /* Stack frame for kernel_thread(). */
 struct kernel_thread_frame
@@ -91,7 +96,11 @@ thread_init (void)
 
   lock_init (&tid_lock);
   list_init (&ready_list);
+
+
   list_init (&all_list);
+  list_init(&threads_list);
+
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -117,28 +126,39 @@ thread_start (void)
   sema_down (&idle_started);
 }
 
-/* Called by the timer interrupt handler at each timer tick.
-   Thus, this function runs in an external interrupt context. */
-void
-thread_tick (void)
-{
-  struct thread *t = thread_current ();
+static void wake_up_sleeping_threads (int64_t ticks) {
+  struct list_elem *element = list_begin(&threads_list);
+  while (element != list_end(&threads_list)) {
+    struct thread *t = list_entry (element, struct thread, elem);
+    if (ticks >= t->waking_up_thread_time) {
+      t->waking_up_thread_time = 0; // Reset the wake-up time.
+      element = list_remove(element);
+      thread_unblock(t);
+    } else {
+      break;
+    }
+  }
+}
 
-  /* Update statistics. */
-  if (t == idle_thread)
+
+void thread_tick (int64_t ticks)
+{
+  wake_up_sleeping_threads(ticks);
+
+  struct thread *currentThread = thread_current();
+
+  if (currentThread == idle_thread)
     idle_ticks++;
 #ifdef USERPROG
-  else if (t->pagedir != NULL)
+  else if (currentThread->pagedir != NULL)
     user_ticks++;
 #endif
   else
     kernel_ticks++;
 
-  /* Enforce preemption. */
   if (++thread_ticks >= TIME_SLICE)
-    intr_yield_on_return ();
+    intr_yield_on_return();
 }
-
 /* Prints thread statistics. */
 void
 thread_print_stats (void)
@@ -171,6 +191,7 @@ thread_create (const char *name, int priority,
   struct switch_entry_frame *ef;
   struct switch_threads_frame *sf;
   tid_t tid;
+  enum intr_level old_level;
 
   ASSERT (function != NULL);
 
@@ -182,6 +203,8 @@ thread_create (const char *name, int priority,
   /* Initialize thread. */
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
+
+  old_level = intr_disable ();
 
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
@@ -198,12 +221,34 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
   sf->ebp = 0;
 
+  intr_set_level (old_level);
+
   /* Add to run queue. */
   thread_unblock (t);
+  //thread_yield();
 
   return tid;
 }
 
+void
+thread_sleep (int64_t time)
+{
+  struct list_elem *e;
+  for (e = list_begin (&threads_list); e != list_end (&threads_list);
+       e = list_next (e))
+    {
+      struct thread *t = list_entry (e, struct thread, elem);
+      if (time < t->waking_up_thread_time){
+        break;
+      }
+  }
+  thread_current()->waking_up_thread_time = time;
+  list_insert(e, &thread_current()->elem);
+
+  enum intr_level old_level = intr_disable ();
+  thread_block();
+  intr_set_level (old_level);
+}
 /* Puts the current thread to sleep.  It will not be scheduled
    again until awoken by thread_unblock().
 
@@ -278,12 +323,12 @@ thread_tid (void)
 /* Deschedules the current thread and destroys it.  Never
    returns to the caller. */
 void
-thread_exit (void)
+thread_exit (int status)
 {
   ASSERT (!intr_context ());
 
 #ifdef USERPROG
-  process_exit ();
+  process_exit (status);
 #endif
 
   /* Remove thread from all threads list, set our status to dying,
@@ -422,7 +467,7 @@ kernel_thread (thread_func *function, void *aux)
 
   intr_enable ();       /* The scheduler runs with interrupts off. */
   function (aux);       /* Execute the thread function. */
-  thread_exit ();       /* If function() returns, kill the thread. */
+  thread_exit (0);       /* If function() returns, kill the thread. */
 }
 
 /* Returns the running thread. */
@@ -451,8 +496,6 @@ is_thread (struct thread *t)
 static void
 init_thread (struct thread *t, const char *name, int priority)
 {
-  enum intr_level old_level;
-
   ASSERT (t != NULL);
   ASSERT (PRI_MIN <= priority && priority <= PRI_MAX);
   ASSERT (name != NULL);
@@ -463,10 +506,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
-
-  old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
-  intr_set_level (old_level);
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
@@ -578,7 +618,30 @@ allocate_tid (void)
 
   return tid;
 }
-
+
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
+
+//todo kerim
+struct thread *
+get_thread(tid_t tid)
+{
+  struct list_elem *e;
+  struct thread * dest_thread = NULL;
+  enum intr_level old_level;
+
+  old_level = intr_disable ();
+  for (e = list_begin (&all_list); e != list_end (&all_list);
+       e = list_next (e))
+{
+      struct thread *t = list_entry (e, struct thread, allelem);
+      if (tid == t->tid){
+        dest_thread = t;
+        break;
+      }
+  }
+  intr_set_level (old_level);
+  return dest_thread;
+}
+
