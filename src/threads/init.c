@@ -286,7 +286,7 @@ run_task (char **argv)
   
   printf ("Executing '%s':\n", task);
 #ifdef USERPROG
-  initialize_process();
+  process_init();
   process_wait (process_execute (task));
 #else
   run_test (task);
@@ -325,10 +325,7 @@ run_actions (char **argv)
       {NULL, 0, NULL},
     };
   /* If no arguments are passed, call the hello_world function. */
-  if (*argv == NULL) {
-    print_hello(argv);
-    return;
-  }
+
   while (*argv != NULL)
     {
       const struct action *a;

@@ -3,13 +3,11 @@
 
 #include "threads/thread.h"
 
-#define COMMAND_ARGS_DELIMITER " "
-#define COMMAND_ARGS_MAX 30
-#define COMMAND_LENGTH_MAX 100
-
+#define ARGS_DELIMITER " "
+#define ARGUMENT_MAX 36
+#define SIZE_MAX 120
 typedef int pid_t;
 
-/* Process management functions. */
 pid_t process_execute (const char *file_name);
 int process_wait (pid_t child_tid);
 void process_exit (int status);
@@ -25,4 +23,10 @@ int process_file_length (int fd);
 int process_file_position (int fd);
 void process_close_all(void);
 
-#endif /* USERPROG_PROCESS_H */
+
+
+void connector_ini(void);
+int connector_read(char *pipe_name, int ticket);
+void connector_write(char *pipe_name, int ticket, int message);
+
+#endif
