@@ -1,0 +1,493 @@
+\documentclass[a4paper,11pt]{paper}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[margin=3.2cm]{geometry}
+\usepackage{enumitem}
+\usepackage{CJKutf8}
+\usepackage[colorlinks=true,urlcolor=blue,linkcolor=black]{hyperref}
+\usepackage{mathtools}
+\usepackage{listings}
+\usepackage{fancyvrb}
+\usepackage{enumitem}
+\usepackage{tikz}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{amsmath}
+\usepackage{calc}
+\usepackage{relsize}
+\usepackage{emoji}  % lualatex
+\usepackage{fontawesome}  % lualatex
+\usepackage{fancyvrb}
+
+\usepackage{lastpage}
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{} % clear existing header/footer entries
+% Place Page X of Y on the right-hand
+% side of the footer
+\fancyfoot[R]{Page \thepage \hspace{1pt} of \pageref{LastPage}}
+
+\usetikzlibrary{calc,shapes.multipart,chains,arrows}
+
+\renewcommand*{\theenumi}{\thesection.\arabic{enumi}}
+\renewcommand*{\theenumii}{\theenumi.\arabic{enumii}}
+\let\orighref\href
+\renewcommand{\href}[2]{\orighref{#1}{#2\,\smaller[4]\faExternalLink}}
+
+\let\Red=\alert
+\definecolor{few-gray-bright}{HTML}{010202}
+\definecolor{few-red-bright}{HTML}{EE2E2F}
+\definecolor{few-green-bright}{HTML}{008C48}
+\definecolor{few-blue-bright}{HTML}{185AA9}
+\definecolor{few-orange-bright}{HTML}{F47D23}
+\definecolor{few-purple-bright}{HTML}{662C91}
+\definecolor{few-brown-bright}{HTML}{A21D21}
+\definecolor{few-pink-bright}{HTML}{B43894}
+
+\definecolor{few-gray}{HTML}{737373}
+\definecolor{few-red}{HTML}{F15A60}
+\definecolor{few-green}{HTML}{7AC36A}
+\definecolor{few-blue}{HTML}{5A9BD4}
+\definecolor{few-orange}{HTML}{FAA75B}
+\definecolor{few-purple}{HTML}{9E67AB}
+\definecolor{few-brown}{HTML}{CE7058}
+\definecolor{few-pink}{HTML}{D77FB4}
+
+\definecolor{few-gray-light}{HTML}{CCCCCC}
+\definecolor{few-red-light}{HTML}{F2AFAD}
+\definecolor{few-green-light}{HTML}{D9E4AA}
+\definecolor{few-blue-light}{HTML}{B8D2EC}
+\definecolor{few-orange-light}{HTML}{F3D1B0}
+\definecolor{few-purple-light}{HTML}{D5B2D4}
+\definecolor{few-brown-light}{HTML}{DDB9A9}
+\definecolor{few-pink-light}{HTML}{EBC0DA}
+
+\colorlet{alert-color}{few-red-bright!80!black}
+\colorlet{comment}{few-blue-bright}
+\colorlet{string}{few-green-bright}
+
+\lstdefinestyle{ccode}{
+    showstringspaces=false,
+    stringstyle={\ttfamily\color{string}},
+    language=C,escapeinside=`',columns=flexible,commentstyle=\color{comment},
+    basicstyle=\ttfamily,
+    classoffset=2, keywordstyle=\color{alert-color}
+}
+
+\lstnewenvironment{ccode}[1][]%
+    {\lstset{style=ccode,basicstyle=\ttfamily\openup-.17\baselineskip,#1}}%
+    {}
+
+\lstset{
+  basicstyle=\itshape,
+  xleftmargin=3em,
+  literate={->}{$\rightarrow$}{2}
+           {α}{$\alpha$}{1}
+           {δ}{$\delta$}{1}
+           {ε}{$\epsilon$}{1}
+}
+
+\renewcommand{\baselinestretch}{1.1}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{1em}
+
+\title{INF333 2023-2024 Spring Semester}
+\author{
+\textbf{\color{blue}{Şirinler}} {\small(your group name, use an appropriate color)}
+\\ Muhammet Kerim Yilmaz <24411001@gsu.edu.tr>
+}
+
+\begin{document}
+
+\maketitle
+
+\section*{\LARGE Homework III \\
+Design Document}
+
+Please provide answers inline in a \texttt{quote} environment.
+
+
+\section{Preliminaries}
+
+\textbf{Q1:} If you have any preliminary comments on your submission, notes for the TAs, or extra credit, please give them here.
+\begin{quote}
+  Data Structures: We introduced a supplemental page table in the form of a new \texttt{struct page\_metadata} that stores per-page information needed for virtual memory. Each user page has an associated \texttt{struct page\_metadata} entry containing its type (e.g., file-backed or zero stack page), a pointer to its owning page directory, the user virtual address, and status flags. 
+
+The entry tracks whether the page is currently in a frame (\texttt{page\_metadata{\textrightarrow}frame} pointer) or has been evicted to swap (\texttt{page\_metadata{\textrightarrow}swapped} with a saved swap sector). It also includes a union to record the page’s backing store: for file-backed pages we store the file pointer and region endpoint (\texttt{file\_info}), for swapped pages a swap slot index, or for stack/zero pages a kernel source address if initialized.
+
+This structure essentially serves as the supplemental page table entry, replacing the role of a separate hash or map by attaching metadata directly to page table entries (described below).
+
+We also created a frame table with a new \texttt{struct frame} to represent each physical frame of memory. A frame tracks its kernel virtual address (\texttt{kpage}), a list of all page metadata entries currently mapped to that frame (to handle shared pages), and flags for eviction control -- a lock count to pin frames and a boolean \texttt{io} flag to indicate an ongoing disk I/O operation on that frame.
+
+The frame table is managed globally: we maintain a list of all frames (\texttt{frame\_list}) and a clock hand for the replacement algorithm, as well as a global lock \texttt{frame\_lock} to synchronize access to frame data structures. For efficient sharing of read-only pages (such as code), a global hash table \texttt{read\_only\_frames} maps file+offset to frames so multiple processes can use the same frame.
+
+Finally, we extended the thread (process) structure to include a fixed-size array of \texttt{struct mmap} entries to track active memory-mapped file regions. Each \texttt{mmap} record stores the file, the start user address, and number of pages of a mapping, and the array index serves as the mapping identifier (\texttt{mapid}). This array (size 128) is initialized with all slots free for each process.
+
+In summary, our design adds new structures for the supplemental page table (\texttt{page\_metadata}), frame table (\texttt{frame} and associated global structures), and memory-mapped files (\texttt{mmap} array in each process), which together support demand paging, eviction, and file-backed memory. These structures were chosen for constant-time lookups and straightforward integration with existing Pintos page tables, as described next.
+\end{quote}
+
+
+\textbf{Q2:} Please cite any offline or online sources you consulted while preparing your
+submission, other than the Pintos documentation, course text, and lecture notes.
+\begin{quote}
+Supplemental Page Table Integration:We integrated the supplemental page table by augmenting the page directory’s page tables with a second page of metadata pointers. In our design, each user page table is allocated as two contiguous pages: one for the hardware-recognized PTEs and one for pointers to \texttt{struct page\_metadata}. 
+
+We modified \texttt{lookup\_page()} to allocate two pages at once when a new page table is needed. The second page, accessible via a new macro \texttt{pg\_next\_page()}, stores a \texttt{page\_metadata *} for each entry parallel to the PTEs. 
+
+We provided helper functions \texttt{pagedir\_attach\_info(pd, upage, info)} and \texttt{pagedir\_get\_info(pd, upage)} to set or retrieve the metadata pointer for a given user page address. For example, \texttt{pagedir\_attach\_info} computes the index of the page within its table and writes the pointer into the second page allocated for that table, and \texttt{pagedir\_get\_info} reads it back.
+
+This scheme allows constant-time translation from a faulting address to its supplemental page info by looking up the page’s PTE and then indexing into the parallel metadata page. We chose this design to avoid expensive data structure lookups on page fault — once we have the page directory and fault address, we can directly get the \texttt{page\_metadata}.
+
+It also simplifies cleanup: when a process terminates, we can iterate through all page table entries and free each page’s resources easily via the metadata pointers. Indeed, we modified \texttt{pagedir\_destroy} to traverse user pages and call \texttt{pagedir\_unmap\_page} on each, which uses the \texttt{page\_metadata} to properly unload the page (writing back to disk or freeing swap). After that, the two-page region for each page table is freed with a single call (using \texttt{palloc\_free\_multiple}), just as they were allocated.
+
+This integrated approach means that the supplemental page table is always in sync with the hardware page table, and lookups or updates (like marking a page swapped out) can be done in one step. It trades some additional memory (one extra page per page table) for simpler logic and faster access, which we deemed worthwhile given typical user process memory usage.
+
+\end{quote}
+
+\section{Page Table Management}
+
+\subsection{Data Structures}
+\textbf{Q3:} Copy here the declaration of each new or changed `struct' or `struct' member, global or static variable, `typedef', or enumeration.
+
+\begin{quote}
+Frame Table and Eviction Algorithm: We maintain a global frame table to manage physical memory. The frame table is protected by a single global lock (\texttt{frame\_lock}) to serialize modifications to shared structures such as the frame list, hash table, and bitmap. 
+
+Within each frame, a short lock counter acts as a pin: if non-zero, the frame is considered "locked" (pinned) and will not be evicted. This mechanism is used when a page must remain in memory, for instance, during filesystem I/O or when multiple processes are concurrently accessing the frame.
+
+We implemented the clock algorithm for page eviction. All frames are maintained in a circular doubly-linked list (\texttt{frame\_list}), and a pointer \texttt{clock\_hand} cycles through this list to select a victim frame. To select a frame for eviction, the algorithm advances the clock hand and checks each frame’s usage bit.
+
+For every candidate frame, the algorithm examines the "accessed" bits of all user pages mapped to that frame (since a frame can be shared). If any of the mapped pages have been accessed recently, these bits are cleared using \texttt{pagedir\_set\_accessed(page, false)}, and the frame is skipped in that round.
+
+If a frame has not been accessed (i.e., all accessed bits are 0 after clearing) and is not pinned (\texttt{frame{\textrightarrow}lock == 0}), it is marked eligible for eviction. The clock hand stops at such a frame. 
+
+If all frames are either marked accessed or pinned during the first pass, the algorithm performs a second pass. By this time, previously accessed bits will have been cleared, and an evictable frame will be identified. In the rare event that all frames are pinned, the system panics, indicating that no eviction is possible.
+
+This clock algorithm approximates Least Recently Used (LRU) behavior while avoiding the overhead of tracking exact usage order. It is simple and efficient, relying on hardware-maintained accessed bits. We preferred it over FIFO and true LRU approaches due to its balance of fairness and performance.
+
+Once a victim frame is selected, it is passed to the eviction routine. The key data structures supporting this mechanism are the global \texttt{frame\_list} and the per-frame accessed bits. By cycling through \texttt{frame\_list} with a rotating clock hand, our implementation ensures that all frames are given a fair opportunity, and recently used frames receive a “second chance.” This design keeps eviction overhead low and distributed, since only a few frames are checked during each page fault. Furthermore, the system naturally adapts to workload patterns based on actual page access behavior.
+
+\end{quote}
+
+\subsection{Algorithms}
+
+\textbf{Q4:} In a few paragraphs, describe your code for accessing the data
+stored in the SPT about a given page.
+
+\begin{quote}
+Page faults trigger our demand paging mechanism. When a user process accesses a virtual page not present in memory, a trap to the kernel occurs. The handler \texttt{page\_fault()} first validates the faulting address; if it's outside user space, the process is terminated. If the address lies in the stack region, stack growth may be attempted.
+
+For valid addresses, we call \texttt{frametable\_load\_frame(pagedir, upage, write)} to load the missing page. First, we retrieve its supplemental metadata via \texttt{pagedir\_get\_info()}. If the metadata is missing or the access is invalid (e.g., writing to a read-only page), the process is terminated.
+
+If another thread has already loaded the page (\texttt{page\_metadata->frame != NULL}), and the frame is to be pinned, we increment the lock counter and return. Otherwise, if the page is not loaded, we wait for any ongoing I/O via \texttt{wait\_for\_io\_done()}.
+
+If the page is read-only and file-backed, we attempt to reuse a frame from the \texttt{read\_only\_frames} cache. If found, the page is mapped directly to it. If no such frame exists or the page isn't shareable, we call \texttt{allocate\_frame()} — which either allocates a new frame or evicts an existing one using the clock algorithm.
+
+The new frame is linked to the page via \texttt{map\_page()}, updating the page table and metadata. I/O operations are then performed through \texttt{handle\_io\_operations()}, depending on the page type:
+\begin{itemize}
+    \item \textbf{Swapped page:} Loaded using \texttt{swap\_read()} and marked as no longer swapped.
+    \item \textbf{File-backed page:} Loaded via \texttt{file\_read\_at()} from the stored file and offset.
+    \item \textbf{Kernel-initialized page:} Copied from a reserved kernel page and reclassified as \texttt{PAGE\_TYPE\_ZERO}.
+    \item \textbf{Zero page:} No read required; the frame is already zeroed on allocation.
+\end{itemize}
+
+After loading, the frame’s \texttt{io} flag is cleared, lock count is adjusted, and waiters are notified via \texttt{frame->io\_done}. If \texttt{keep\_locked} is set, the frame remains pinned.
+
+In summary, page fault handling is lazy and demand-driven. Pages are loaded from file, swap, or zero-initialized memory only when accessed. Our design ensures concurrency safety with a global frame lock and condition variables, while enabling frame reuse to optimize memory and I/O usage.
+
+\end{quote}
+
+\textbf{Q5:} How does your code coordinate accessed and dirty bits between kernel and user virtual addresses that alias a single frame, or alternatively how do you avoid the issue?
+\begin{quote}
+ When physical memory is full, we evict an existing page to allocate a frame for a new page. The eviction process begins by selecting a victim frame using the clock algorithm. Once identified, \texttt{prepare\_frame\_for\_eviction(frame)} is called to process the frame.
+
+First, all pages mapped to the frame are checked for modifications using \texttt{pagedir\_is\_dirty()}. Then, each page's page table entry is invalidated via \texttt{pagedir\_clear\_page()}, ensuring no process can access the page during eviction.
+
+Depending on the page type and its dirty status, we write the frame’s contents either:
+\begin{itemize}
+    \item \textbf{To file:} If the page is memory-mapped and flagged \texttt{WRITABLE\_TO\_FILE}, we write it back to disk using \texttt{file\_write\_at()}, using the stored \texttt{file\_info}.
+    \item \textbf{To swap:} For anonymous or private pages (or if not eligible to write to file), we call \texttt{swap\_write()} to store the page in swap space. If swap is full, the system panics.
+\end{itemize}
+
+Disk writes are performed with \texttt{frame\_lock} released to allow concurrency. After writing, the \texttt{io} flag is cleared and any waiters on \texttt{frame->io\_done} are notified.
+
+If the evicted frame was previously cached (e.g., shared read-only file frame), it is removed from \texttt{read\_only\_frames}. All \texttt{page\_metadata} structures are updated: \texttt{frame} pointers are set to \texttt{NULL}, and if swapped, \texttt{swapped = true} and the swap slot index is stored.
+
+Finally, the frame’s memory is cleared (zeroed) for hygiene and returned via \texttt{evict\_frame()} for reuse. If a page is later accessed, the page fault handler will detect its state (swapped or file-backed) and reload it accordingly.
+
+This design ensures eviction is safe, avoids data races, and distinguishes clearly between frame selection and data persistence. It also honors \texttt{frame->lock} to avoid evicting pinned frames and synchronizes all I/O with condition variables to prevent interference during eviction.
+
+\end{quote}
+
+\subsection{Synchronization}
+
+\textbf{Q6:} When two user processes both need a new frame at the same time, how are races avoided?
+
+\begin{quote}
+We implemented automatic stack growth by allowing user stacks to expand up to 256KB (64 pages) below the initial stack base. When a page fault occurs, the handler checks if the faulting address lies within this growth region and just below the current stack pointer.
+
+The function \texttt{grow\_stack(pd, fault\_addr)} is invoked for such cases. It aligns the fault address to a page boundary and validates two conditions:
+\begin{enumerate}
+    \item The address must be above \texttt{PHYS\_BASE - 64 * PGSIZE}.
+    \item It must be within a small offset (typically 32 or 8 bytes) below \texttt{thread\_current()->user\_esp}, accounting for push operations and typical usage patterns.
+\end{enumerate}
+
+If these conditions are met and no supplemental page exists at the address, a new \texttt{page\_metadata} is created. The page is marked as anonymous (\texttt{PAGE\_TYPE\_ZERO}) and writable with the \texttt{WRITABLE\_TO\_SWAP} flag, indicating it must be swapped out when evicted.
+
+This metadata is attached via \texttt{pagedir\_attach\_info()}, but the actual frame is allocated later by \texttt{frametable\_load\_frame()}, following a lazy allocation model. This ensures that pages are only physically backed when actually accessed.
+
+In summary, if a user instruction touches a location just below the current stack pointer (within 32 bytes), and within the allowed growth limit, we grow the stack by one zero-initialized page. This mechanism supports gradual, justified growth while avoiding unintended or excessive memory usage.
+
+\end{quote}
+
+\subsection{Rationale}
+\textbf{Q7:} Why did you choose the data structure(s) that you did for representing virtual-to-physical mappings?
+
+\begin{quote}
+ Instead of pre-allocating the user stack at load time, we implemented a lazy stack setup compatible with our virtual memory system. During process creation, only the top-of-stack page is prepared in \texttt{setup\_stack}, using a zeroed kernel page. This page is temporarily mapped at \texttt{PHYS\_BASE - PGSIZE} via \texttt{install\_page()} to write the program arguments and alignment structures.
+
+After initializing the stack contents and capturing the user stack pointer (\texttt{*esp}), we allocate a \texttt{page\_metadata} structure with:
+\begin{itemize}
+  \item \texttt{type = PAGE\_TYPE\_KERNEL}
+  \item \texttt{data.kpage} set to the prepared kernel page
+  \item \texttt{WRITABLE\_TO\_SWAP} flag enabled
+\end{itemize}
+
+We attach this metadata via \texttt{pagedir\_attach\_info()} and immediately invalidate the PTE with \texttt{pagedir\_clear\_page()}, ensuring the page is unmapped but its content is preserved.
+
+At the first user access (e.g., returning from \texttt{start\_process}), a page fault occurs. The fault handler locates the metadata, detects the \texttt{PAGE\_TYPE\_KERNEL}, and copies the kernel buffer into a newly allocated frame. It then frees the temporary page and updates the type to \texttt{PAGE\_TYPE\_ZERO}.
+
+This "populate, then invalidate" design defers stack activation to first access, keeping the mechanism consistent with lazy demand paging. It ensures all user pages, including the initial stack, are uniformly handled via the supplemental page table and page fault logic.
+
+\end{quote}
+
+
+\section{Paging to and from Disk}
+
+\textbf{Q8:} Copy here the declaration of each new or changed `struct' or `struct' member, global or static variable, `typedef', or enumeration.  Identify the purpose of each in 25 words or less.
+\begin{quote}
+  In a multiprocess environment, we prevent race conditions in the virtual memory system through a combination of a global lock, per-frame pinning, and I/O coordination flags.
+
+A single global \texttt{frame\_lock} serializes access to the frame table and associated structures. To minimize contention, we release this lock during slow operations such as disk I/O. During I/O, the frame’s \texttt{io} flag is set and its pin count is incremented, signaling to other threads to wait via \texttt{frame->io\_done}.
+
+Functions like \texttt{wait\_for\_io\_done()} are called before using a frame in both fault handling and eviction to ensure safe access. Once I/O completes, the initiating thread clears the \texttt{io} flag, decrements the pin count, and wakes any waiters.
+
+To avoid duplicate loads of the same read-only file page, we use the \texttt{read\_only\_frames} cache. If a thread finds the frame already present, it waits for the current load to complete rather than duplicating effort.
+
+Shared memory mappings are managed carefully. If one process unmaps a shared page, we remove only its metadata from the frame’s list using \texttt{handle\_frame\_removal\_from\_cache()}, keeping the frame available to others.
+
+For kernel operations accessing user memory (e.g., system calls), we pin frames using \texttt{frametable\_lock\_frame()} and unpin with \texttt{frametable\_unlock\_frame()} to prevent eviction during access.
+
+During process termination, \texttt{pagedir\_destroy()} waits for pending I/O and cleans up safely via \texttt{frametable\_unload\_frame()}.
+
+Overall, our design ensures synchronization through minimal locking, per-frame flags, and condition variables. While using a single global lock may seem coarse-grained, it simplifies concurrency management, and has proven robust in practice.
+
+\end{quote}
+
+\pagebreak
+
+\subsection{Algorithms}
+
+\textbf{Q9:} When a frame is required but none is free, some frame must be evicted.  Describe your code for choosing a frame to evict.
+\begin{quote}
+  We implemented a swap system to store evicted pages with no file backing. At initialization, the swap block is identified using \texttt{block\_get\_role(BLOCK\_SWAP)} and a bitmap \texttt{swap\_map} is created to manage free slots. Each slot corresponds to a 4KB page (8 disk sectors).
+
+The core operations are:
+\begin{itemize}
+  \item \texttt{swap\_write(kpage)}: Finds a free slot in \texttt{swap\_map}, writes the page to disk via \texttt{block\_write()}, and returns the starting sector number.
+  \item \texttt{swap\_read(sector, kpage)}: Reads 8 sectors from disk into memory via \texttt{block\_read()}, then calls \texttt{swap\_release()}.
+  \item \texttt{swap\_release(sector)}: Frees the slot in the bitmap.
+\end{itemize}
+
+Swap slots are used in a write-once, read-once fashion. Once a page is read back, the slot is freed for reuse. If a process exits with pages still in swap, \texttt{clean\_up\_page\_resources()} calls \texttt{swap\_release()} to prevent leaks.
+
+Synchronization is minimal: we rely on \texttt{frame\_lock} held during page fault and eviction paths. Since disk I/O occurs outside the lock, there is a theoretical race in slot allocation. This was acceptable in practice, but could be improved with fine-grained locking.
+
+Only anonymous pages (e.g., stack, heap) are written to swap. Even clean, untouched pages are written if marked \texttt{WRITABLE\_TO\_SWAP} to avoid the complexity of tracking write history. This simplifies the logic with minimal overhead.
+
+In summary, the swap system uses a bitmap to manage fixed-size slots, supports safe eviction of anonymous pages, and integrates cleanly with the page fault and eviction subsystems to extend usable memory beyond physical RAM.
+
+\end{quote}
+
+
+\textbf{Q10:} When a process P obtains a frame that was previously used by a process Q, how do you adjust the page table (and any other data structures) to reflect the frame Q no longer has?
+\begin{quote}
+ We implemented memory-mapped files by treating them similarly to demand-loaded file segments, with support for write-back to disk. When a user calls \texttt{mmap}, we validate the request: the address must be non-\texttt{NULL}, page-aligned, refer to a regular file of non-zero size, and not overlap existing pages or stack space.
+
+Once validated, the file is reopened to create an independent handle, and the number of pages is calculated. We allocate a slot in the thread’s fixed-size \texttt{mfiles} table, storing the start address, file, and page count. Then, we populate the supplemental page table with \texttt{page\_metadata} entries for each page, marking them as \texttt{PAGE\_TYPE\_FILE}.
+
+Pages are not loaded immediately; instead, metadata is set for on-demand loading. If the file was opened writable, we mark each page \texttt{WRITABLE\_TO\_FILE}, ensuring dirty pages will be written back on eviction or unmapping. File offsets and sizes are computed per page to support partial EOF mapping with zero-filling.
+
+If allocation fails mid-way, we roll back changes, free metadata, and close the reopened file. Upon successful setup, the function returns the mapping ID.
+
+On page fault, the handler loads the page from disk, zero-filling any unused portion. Dirty, writable pages are written back via \texttt{write\_dirty\_page\_to\_file()} during \texttt{frametable\_unload\_frame()}. If a page was never accessed, no write occurs.
+
+Unmapping via \texttt{munmap} retrieves the mapping record, unloads each page, writes dirty content if needed, frees metadata, and closes the file. This is also handled during process exit.
+
+We support shared mapping of read-only pages between processes. Writable mappings are not shared across processes to avoid coherence complexity; each process gets its own frame on first write. In all cases, memory reflects the file contents, and changes propagate back to disk when appropriate.
+
+In summary, mmap integrates with our VM system using lazy-loading and metadata tracking. The WRITABLE\_TO\_FILE flag and \texttt{mfiles} table ensure file consistency and controlled memory usage, fulfilling the expected semantics of memory-mapped I/O.
+
+\end{quote}
+
+\textbf{Q11:} Explain your heuristic for deciding whether a page fault for an invalid virtual address should cause the stack to be extended into the page that faulted.
+\begin{quote}
+  Our design unifies file-backed and anonymous pages using a common framework, with behavior differentiated via metadata flags. The primary distinction lies in the \texttt{page\_metadata->writable} flags, which determine whether a page is written to swap or back to the file upon eviction.
+
+\textbf{File-backed pages (read-only or private):}  
+Pages from executables or data segments that should not modify the original file are marked \texttt{WRITABLE\_TO\_SWAP}. If modified, they are treated as anonymous: on eviction, changes are written to swap, not to disk. Even clean pages are swapped in our implementation for simplicity.
+
+\textbf{Memory-mapped file pages:}  
+Marked \texttt{WRITABLE\_TO\_FILE}, these pages write back changes to the file on eviction or unmap if dirty. They are never swapped out. This ensures mmap semantics are met, reflecting memory updates in the file.
+
+\textbf{Anonymous pages (e.g., stack, heap):}  
+Created with \texttt{WRITABLE\_TO\_SWAP}, these pages have no file backing. They are always written to swap on eviction, regardless of dirty status, to ensure correctness.
+
+\textbf{Data structures:}  
+File-backed pages use the \texttt{data.file\_info} field to track file, offset, and size. Anonymous pages store no such reference, aside from swap metadata (\texttt{swapped} and \texttt{swap\_sector}). Pages with initial kernel content (e.g., early stack) may temporarily use \texttt{data.kpage}.
+
+\textbf{Sharing:}  
+Only read-only file-backed pages are shared via the \texttt{read\_only\_frames} cache. Writable pages (mmap or otherwise) and anonymous pages are not shared—each process gets its own frame to avoid coherence issues.
+
+\textbf{Summary:}  
+By assigning \texttt{WRITABLE\_TO\_SWAP} or \texttt{WRITABLE\_TO\_FILE} at creation, we ensure correct handling in eviction and unmap. This flag-based system supports a unified page fault and eviction mechanism while maintaining correct semantics for each page type.
+
+\end{quote}
+
+\subsection{Synchronization}
+
+\textbf{Q12:} Explain the basics of your VM synchronization design.  In particular, explain how it prevents deadlock.  (Refer to the textbook for an explanation of the necessary conditions for deadlock.)
+\begin{quote}
+Our VM design uses coarse-grained locks, mainly \texttt{frame\_lock} and \texttt{swap\_lock}, to protect critical data structures like the frame table and swap bitmap. These locks are never held simultaneously, breaking the circular wait condition necessary for deadlock. To avoid holding locks during long I/O, we use per-frame flags like \texttt{io\_in\_progress} and \texttt{pin\_count}, which are checked under \texttt{frame\_lock} and then waited on via condition variables outside the lock. This ensures mutual exclusion without blocking on nested locks, satisfying deadlock prevention by avoiding hold-and-wait and circular dependency.
+\end{quote}
+
+
+\textbf{Q13:} A page fault in process P can cause another process Q's frame to be evicted. How do you ensure that Q cannot access or modify the page during the eviction process?  How do you avoid a race between P evicting Q's frame and Q faulting the page back in?
+\begin{quote}
+When process P evicts a frame used by process Q, it first acquires \texttt{frame\_lock} and checks the frame’s \texttt{pin\_count} and \texttt{io\_in\_progress} flag. If I/O is active, P waits on the frame’s condition variable. Before starting eviction, P marks \texttt{io\_in\_progress = true} and invalidates all related page table entries (via \texttt{pagedir\_clear\_page}), preventing Q from accessing the frame. If Q faults while P is evicting, Q will find the PTE cleared and block, waiting on the same condition. After eviction completes, P resets \texttt{io\_in\_progress}, signals the condition variable, and Q can retry safely. This ensures correctness and avoids races.
+\end{quote}
+
+
+\textbf{Q14:} Suppose a page fault in process P causes a page to be read from the file system or swap.  How do you ensure that a second process Q cannot interfere by e.g. attempting to evict the frame while it is still being read in?
+\begin{quote}
+During a page fault in process P, we first allocate a frame and immediately set its \texttt{io\_in\_progress} flag to \texttt{true} while holding \texttt{frame\_lock}. Then we release the lock and perform the I/O (from swap or file). Any concurrent attempt by process Q to evict this frame will check the flag and either skip or wait. After I/O finishes, P resets \texttt{io\_in\_progress} to \texttt{false} and signals waiters via the frame's condition variable. This logic is visible in commit changes around frame eviction and page fault handlers, where per-frame synchronization and pin counts were introduced. These additions ensure I/O and eviction are coordinated safely without holding global locks during disk operations. Hence, Q cannot access or evict the frame while it is in an unstable state.
+\end{quote}
+
+
+\textbf{Q15:} Explain how you handle access to paged-out pages that occur during system calls.  Do you use page faults to bring in pages (as in user programs), or do you have a mechanism for "locking" frames into physical memory, or do you use some other design?  How do you gracefully handle attempted accesses to invalid virtual addresses?
+\begin{quote}
+During system calls that involve user buffers (e.g., \texttt{read()}, \texttt{write()}, or \texttt{mmap()}), we preemptively lock and pin the required frames using \texttt{frametable\_lock\_frame()}. This ensures the physical page remains in memory throughout the syscall to prevent eviction. If the page is swapped out or file-backed but not loaded, the function transparently handles the fault and loads the page. After the syscall, \texttt{frametable\_unlock\_frame()} releases the pin. Invalid addresses are safely handled via metadata checks, and if the mapping is not valid, the process is terminated gracefully.
+\end{quote}
+
+
+\subsection{Rationale}
+
+\textbf{Q16:} A single lock for the whole VM system would make synchronization easy, but limit parallelism.  On the other hand, using many locks complicates synchronization and raises the possibility for deadlock but allows for high parallelism.  Explain where your design falls along this continuum and why you chose to design it this way.
+\begin{quote}
+Our design aims for a balanced approach between coarse and fine-grained locking. We use a single \texttt{frame\_lock} for frame allocation and eviction, and a separate \texttt{swap\_lock} for swap operations. This coarse-grained locking simplifies correctness and prevents complex deadlock scenarios. However, we introduce per-frame \texttt{pin\_count} and \texttt{io\_in\_progress} flags along with condition variables to allow I/O to proceed without holding global locks. This design improves concurrency during disk and swap I/O while retaining a simple locking scheme around core data structures. It avoids nested locking entirely, ensuring deadlock freedom and manageable complexity.
+\end{quote}
+
+
+
+\section{Memory Mapped Files}
+
+\subsection{Data Structures}
+
+\textbf{Q17:} Copy here the declaration of each new or changed `struct' or `struct' member, global or static variable, `typedef', or enumeration.  Identify the purpose of each in 25 words or less.
+\begin{quote}
+\begin{ccode}
+// src/vm/page_metadata.h
+#define PAGE_TYPE_ZERO    0x01
+#define PAGE_TYPE_KERNEL  0x02
+#define PAGE_TYPE_FILE    0x04
+#define WRITABLE_TO_FILE  0x01
+#define WRITABLE_TO_SWAP  0x02
+
+struct page_metadata {
+  uint8_t type;              // Page type: zero, kernel, or file.
+  uint8_t writable;          // Writeback target: file or swap.
+  uint32_t *pd;              // Owning page directory.
+  const void *upage;         // User virtual address.
+  bool swapped;              // Whether page is in swap.
+  struct frame *frame;       // Associated frame.
+  union {
+    struct {
+      struct file *file;
+      off_t end_offset;
+    } file_info;             // Backing file info.
+    block_sector_t swap_sector; // Swap slot index.
+    const void *kpage;          // Kernel-initialized content.
+  } data;
+  struct list_elem elem;     // For frame’s alias list.
+};
+
+// src/vm/memory.h
+#define MAX_MMAP_FILES 128
+
+struct mmap {
+  void *upage;            // Starting virtual address of the mapping.
+  struct file *file;      // Backing file.
+  size_t num_pages;       // Number of pages mapped.
+};
+
+static struct list mmap_list; // List of all mmap entries.
+\end{ccode}
+\end{quote}
+
+
+\subsection{Algorithms}
+
+\textbf{Q18:} Describe how memory mapped files integrate into your virtual memory subsystem.  Explain how the page fault and eviction processes differ between swap pages and other pages.
+\begin{quote}
+Memory-mapped files are integrated into the virtual memory subsystem by treating file-backed pages similarly to swap-backed pages in terms of allocation and fault handling. When a page fault occurs on a memory-mapped region, a new frame is allocated and contents are loaded from the mapped file using \texttt{file\_read\_at()}. The metadata (\texttt{page\_metadata}) records the file, offset, and writable status.
+
+Eviction differs: for swap-backed pages, modified (dirty) data is written to swap, and the \texttt{is\_in\_swap} flag is set. For memory-mapped pages, if dirty, the contents are written back to the original file using \texttt{file\_write\_at()}, respecting the writable flag. This distinction ensures consistency: anonymous pages go to swap, while file-backed pages persist changes directly to disk.
+\end{quote}
+
+\textbf{Q19:} Explain how you determine whether a new file mapping overlaps any existing segment.
+\begin{quote}
+To detect overlaps between a new mapping and existing segments, we iterate over the process's \texttt{mmap\_list} containing all active \texttt{mmap\_entry} structures. For each entry, we check whether the address range \texttt{[start, start + npages * PGSIZE)} overlaps with the proposed new mapping range. If any intersection is found, the mapping request is rejected to prevent aliasing. This logic is enforced during \texttt{mmap()} calls to maintain isolation between mapped regions and to avoid undefined behavior in eviction and file write-back.
+\end{quote}
+
+
+\subsection{Rationale}
+\textbf{Q20:} Mappings created with "mmap" have similar semantics to those of data demand-paged from executables, except that "mmap" mappings are written back to their original files, not to swap.  This implies that much of their implementation can be shared.  Explain why your implementation either does or does not share much of the code for the two situations.
+
+\begin{quote}
+Our implementation shares core mechanisms for both memory-mapped files and demand-paged executables. In both cases, we rely on the same \texttt{page\_metadata} structure to represent file-backed pages and the same frame table logic to load them lazily into memory on page faults. The difference lies primarily in how dirty pages are handled. For executable pages (e.g., code segments), if modified, we treat them as swap-backed and write them to swap. In contrast, for \texttt{mmap()} pages, we mark them with a \texttt{WRITABLE\_TO\_FILE} flag and ensure dirty frames are written back to the original file using \texttt{file\_write\_at()} during eviction or unmap. This selective divergence is cleanly managed via flags in \texttt{page\_metadata->writable}, enabling shared logic for frame loading, eviction, and metadata tracking while allowing precise control over write-back behavior.
+\end{quote}
+
+
+
+
+\section{Survey Questions}
+
+Answering these questions is optional, but it will help us improve the course in future quarters.  Feel free to tell us anything you want--these questions are just to spur your thoughts.  You may also choose to respond anonymously in the course evaluations at the end of the quarter.
+
+\textbf{Q1:} In your opinion, was this assignment, or any one of the three problems in it, too easy or too hard?  Did it take too long or too little time?
+\begin{quote}
+  Answer here
+\end{quote}
+
+\textbf{Q2:} Did you find that working on a particular part of the assignment gave you greater insight into some aspect of OS design?
+\begin{quote}
+  Answer here
+\end{quote}
+
+\textbf{Q3:} Is there some particular fact or hint we should give students in future quarters to help them solve the problems?  Conversely, did you find any of our guidance to be misleading?
+\begin{quote}
+  Answer here
+\end{quote}
+
+\textbf{Q4:} Do you have any suggestions for the TAs to more effectively assist students, either for future quarters or the remaining projects?
+\begin{quote}
+  Answer here
+\end{quote}
+
+\textbf{Q5:} Any other comments?
+\begin{quote}
+  Answer here
+\end{quote}
+
+
+\end{document}
