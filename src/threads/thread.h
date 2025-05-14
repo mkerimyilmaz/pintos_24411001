@@ -4,7 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
-#include "fixed_point.h"
+#include "threads/synch.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -12,12 +12,18 @@ enum thread_status
     THREAD_RUNNING,     /* Running thread. */
     THREAD_READY,       /* Not running but ready to run. */
     THREAD_BLOCKED,     /* Waiting for an event to trigger. */
-    THREAD_DYING        /* About to be destroyed. */
+    THREAD_DYING,       /* About to be destroyed. */
+    
+    THREAD_EXITING      /* Exiting, to be freed by parent. */
+ 
   };
 
 /* Thread identifier type.
    You can redefine this to whatever type you like. */
 typedef int tid_t;
+
+#define TID_NONE ((tid_t) 0)            /* Identifiers start at 1. */
+
 #define TID_ERROR ((tid_t) -1)          /* Error value for tid_t. */
 
 /* Thread priorities. */
@@ -33,6 +39,11 @@ struct user_prog_of_thread {
    struct file *executable;          /* Executable file associated with the process */
  };
  
+/* Thread niceness. */
+#define NICE_MIN -20
+#define NICE_DEFAULT 0
+#define NICE_MAX 20
+
 /* A kernel thread or user process.
 
    Each thread structure is stored in its own 4 kB page.  The
@@ -96,23 +107,64 @@ struct thread
     enum thread_status status;          /* Thread state. */
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
-    int priority;                       /* Priority. */
+    int priority;                       /* Effective Priority (can be raised 
+                                           or lowered automatically by 
+                                           priority donation). */
+    int base_priority;                  /* The effective priority of the 
+                                           thread can't go lower than the 
+                                           base */
     struct list_elem allelem;           /* List element for all threads list. */
-    int64_t waking_up_thread_time;
+
+    /* List element for sleep list. */
+    struct list_elem sleep_elem;
+    
+    /* The number of ticks from the previous entry (if any) in the sleeping 
+       threads list to wakeup after. */    
+      int64_t waking_up_thread_time;
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
-#ifdef USERPROG
+    /* List of locks the thread is currently holding. */ 
+    struct list locks_owned_list;
+
+    /* If the thread is waiting on a lock, the lock it's waiting on. */
+    struct lock *waiting_lock;
+
+    /* Used for advanced scheduler. */
+
+    int nice;                           
+    int recent_cpu;                     /* Estimate of how much CPU the thread
+                                           has used recently. */
+
+
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
-    struct user_prog_of_thread thread_prog;
-#endif
+
+    tid_t ptid;
+
+    struct list child_list;
+
+    struct list_elem child_elem;
+
+    int exit_status;
+    
+    struct lock exit_lock;
+
+    struct condition exiting;
+
+    struct file **ofiles;
+
+    struct mmap *mfiles;
+
+    void *user_esp;
+
+
+    struct inode *cwd;
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };
-
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
@@ -122,34 +174,37 @@ extern bool thread_mlfqs;
 void thread_init (void);
 void thread_start (void);
 
-void thread_tick (int64_t ticks);
+void thread_tick (void);
 void thread_print_stats (void);
 
 typedef void thread_func (void *aux);
 tid_t thread_create (const char *name, int priority, thread_func *, void *);
 
-void thread_sleep (int64_t time);
 void thread_block (void);
+void thread_sleep (int64_t ticks);
 void thread_unblock (struct thread *);
 
 struct thread *thread_current (void);
 tid_t thread_tid (void);
 const char *thread_name (void);
 
-void thread_exit (int status) NO_RETURN;
+void thread_exit (void) NO_RETURN;
 void thread_yield (void);
 
 /* Performs some operation on thread t, given auxiliary data AUX. */
 typedef void thread_action_func (struct thread *t, void *aux);
 void thread_foreach (thread_action_func *, void *);
-struct thread *get_thread(tid_t tid);
+
 int thread_get_priority (void);
 void thread_set_priority (int);
+
+void thread_lock_acquired (struct lock *lock);
+void thread_lock_will_wait (struct lock *lock);
+void thread_lock_released (struct lock *lock);
 
 int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
-
 
 #endif /* threads/thread.h */

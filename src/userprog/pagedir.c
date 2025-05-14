@@ -5,6 +5,8 @@
 #include "threads/init.h"
 #include "threads/pte.h"
 #include "threads/palloc.h"
+#include "vm/page_metadata.h"
+#include "vm/frame_table.h"
 
 static uint32_t *active_pd (void);
 static void invalidate_pagedir (uint32_t *);
@@ -22,37 +24,37 @@ pagedir_create (void)
   return pd;
 }
 
-/* Destroys page directory PD, freeing all the pages it
+/* Destroys page directory PD, unloading all the pages it
    references. */
 void
 pagedir_destroy (uint32_t *pd) 
 {
   uint32_t *pde;
+  uint32_t *pt;
+  uint32_t *pte;
+  void *ubase;
+  void *upage;
 
   if (pd == NULL)
     return;
 
   ASSERT (pd != init_page_dir);
-  for (pde = pd; pde < pd + pd_no (PHYS_BASE); pde++)
-    if (*pde & PTE_P) 
-      {
-        uint32_t *pt = pde_get_pt (*pde);
-        uint32_t *pte;
-        
-        for (pte = pt; pte < pt + PGSIZE / sizeof *pte; pte++)
-          if (*pte & PTE_P) 
-            palloc_free_page (pte_get_page (*pte));
-        palloc_free_page (pt);
-      }
+  for (ubase = 0, pde = pd; pde < pd + pd_no (PHYS_BASE);
+       ubase += PTSPAN, pde++)
+    {
+      if (*pde & PTE_P)
+        {
+          pt = pde_get_pt (*pde);
+          for (upage = ubase, pte = pt; pte < pt + PGSIZE / sizeof *pte;
+               upage += PGSIZE, pte++)
+               pagedir_unmap_page (pd, upage);
+          palloc_free_multiple (pt, 2);
+        }
+    }
   palloc_free_page (pd);
 }
 
-/* Returns the address of the page table entry for virtual
-   address VADDR in page directory PD.
-   If PD does not have a page table for VADDR, behavior depends
-   on CREATE.  If CREATE is true, then a new page table is
-   created and a pointer into it is returned.  Otherwise, a null
-   pointer is returned. */
+
 static uint32_t *
 lookup_page (uint32_t *pd, const void *vaddr, bool create)
 {
@@ -63,14 +65,12 @@ lookup_page (uint32_t *pd, const void *vaddr, bool create)
   /* Shouldn't create new kernel virtual mappings. */
   ASSERT (!create || is_user_vaddr (vaddr));
 
-  /* Check for a page table for VADDR.
-     If one is missing, create one if requested. */
   pde = pd + pd_no (vaddr);
   if (*pde == 0) 
     {
       if (create)
         {
-          pt = palloc_get_page (PAL_ZERO);
+          pt = palloc_get_multiple (PAL_ZERO, 2);
           if (pt == NULL) 
             return NULL; 
       
@@ -85,18 +85,8 @@ lookup_page (uint32_t *pd, const void *vaddr, bool create)
   return &pt[pt_no (vaddr)];
 }
 
-/* Adds a mapping in page directory PD from user virtual page
-   UPAGE to the physical frame identified by kernel virtual
-   address KPAGE.
-   UPAGE must not already be mapped.
-   KPAGE should probably be a page obtained from the user pool
-   with palloc_get_page().
-   If WRITABLE is true, the new page is read/write;
-   otherwise it is read-only.
-   Returns true if successful, false if memory allocation
-   failed. */
 bool
-pagedir_set_page (uint32_t *pd, void *upage, void *kpage, bool writable)
+pagedir_set_page (uint32_t *pd, const void *upage, void *kpage, bool writable)
 {
   uint32_t *pte;
 
@@ -107,7 +97,6 @@ pagedir_set_page (uint32_t *pd, void *upage, void *kpage, bool writable)
   ASSERT (pd != init_page_dir);
 
   pte = lookup_page (pd, upage, true);
-
   if (pte != NULL) 
     {
       ASSERT ((*pte & PTE_P) == 0);
@@ -120,7 +109,7 @@ pagedir_set_page (uint32_t *pd, void *upage, void *kpage, bool writable)
 
 /* Looks up the physical address that corresponds to user virtual
    address UADDR in PD.  Returns the kernel virtual address
-   corresponding to that physical address, or a null pointer if
+   corresponding to thxat physical address, or a null pointer if
    UADDR is unmapped. */
 void *
 pagedir_get_page (uint32_t *pd, const void *uaddr) 
@@ -141,7 +130,7 @@ pagedir_get_page (uint32_t *pd, const void *uaddr)
    bits in the page table entry are preserved.
    UPAGE need not be mapped. */
 void
-pagedir_clear_page (uint32_t *pd, void *upage) 
+pagedir_clear_page (uint32_t *pd, const void *upage) 
 {
   uint32_t *pte;
 
@@ -243,7 +232,7 @@ active_pd (void)
   return ptov (pd);
 }
 
-/* Seom page table changes can cause the CPU's translation
+/* Some page table changes can cause the CPU's translation
    lookaside buffer (TLB) to become out-of-sync with the page
    table.  When this happens, we have to "invalidate" the TLB by
    re-activating it.
@@ -260,4 +249,41 @@ invalidate_pagedir (uint32_t *pd)
          "Translation Lookaside Buffers (TLBs)". */
       pagedir_activate (pd);
     } 
+}
+void pagedir_unmap_page(uint32_t *page_dir, const void *user_page) {
+  ASSERT(pg_ofs(user_page) == 0);
+  ASSERT(is_user_vaddr(user_page));
+  ASSERT(page_dir != init_page_dir);
+
+  struct page_metadata *page_info = pagedir_get_info(page_dir, user_page);
+  if (page_info != NULL) {
+    frametable_unload_frame(page_dir, user_page);
+  }
+}
+
+bool pagedir_attach_info(uint32_t *page_dir, const void *user_page, struct page_metadata *info) {
+  ASSERT(pg_ofs(user_page) == 0);
+  ASSERT(is_user_vaddr(user_page));
+  ASSERT(page_dir != init_page_dir);
+
+  uint32_t *page_table_entry = lookup_page(page_dir, user_page, true);
+  if (page_table_entry != NULL) {
+    struct page_metadata **info_slot = ((struct page_metadata **) pg_next_page(page_table_entry)) + pt_no(user_page);
+    *info_slot = info;
+    return true;
+  }
+  return false;
+}
+
+struct page_metadata *pagedir_get_info(uint32_t *page_dir, const void *user_page) {
+  ASSERT(pg_ofs(user_page) == 0);
+  ASSERT(is_user_vaddr(user_page));
+  ASSERT(page_dir != init_page_dir);
+
+  uint32_t *page_table_entry = lookup_page(page_dir, user_page, false);
+  if (page_table_entry != NULL) {
+    struct page_metadata **info_slot = ((struct page_metadata **) pg_next_page(page_table_entry)) + pt_no(user_page);
+    return *info_slot;
+  }
+  return NULL;
 }

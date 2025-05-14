@@ -8,9 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#if SYSV_STREAMS
 #include <stropts.h>
-#endif
 #include <sys/ioctl.h>
 #include <sys/stat.h>
 #include <sys/time.h>

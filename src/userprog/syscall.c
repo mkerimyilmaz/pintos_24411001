@@ -1,215 +1,276 @@
 #include "userprog/syscall.h"
-#include <stdio.h>
-#include <syscall-nr.h>
-#include <string.h>
-#include "threads/interrupt.h"
-#include "threads/thread.h"
-#include "threads/vaddr.h"
-#include "devices/shutdown.h"
 #include "userprog/process.h"
 #include "filesys/filesys.h"
+#include "filesys/file.h"
+#include "filesys/directory.h"
+#include "devices/shutdown.h"
+#include "devices/block.h"
+#include "threads/interrupt.h"
+#include "threads/thread.h"
+#include "threads/synch.h"
+#include "threads/vaddr.h"
+#include "threads/pte.h"
+#include "vm/frame_table.h"
+#include "vm/memory.h"
 
-typedef int pid_t;
-static int (*syscall_handlers[20]) (struct intr_frame *);
+#include <stdio.h>
+#include <syscall-nr.h>
 
-static int
-read_user_byte(const uint8_t *uaddr)
-{
-  if (!is_user_vaddr(uaddr))
-    return -1;
-  int result;
-  asm("movl $1f, %0; movzbl %1, %0; 1:"
-      : "=&a" (result) : "m" (*uaddr));
-  return result;
+#define ARG(ptr, pos, type, var) \
+  if (!get_int_arg((ptr), (pos), (int *)&(var))) thread_exit()
+
+#define ARG_PTR(ptr, pos, var) \
+  if (!get_int_arg((ptr), (pos), (int *)&(var)) || !is_user_vaddr((var))) thread_exit()
+
+#define ARG_STR(ptr, pos, var) \
+  if (!get_str_arg((ptr), (pos), &(var))) thread_exit()
+
+static void syscall_handler(struct intr_frame *);
+
+static int get_user(const uint8_t *uaddr) {
+  return is_user_vaddr(uaddr) ? *uaddr : -1;
 }
 
-static bool
-write_user_byte(uint8_t *udst, uint8_t byte)
-{
-  if (!is_user_vaddr(udst))
-    return false;
-  int error_code;
-  asm("movl $1f, %0; movb %b2, %1; 1:"
-      : "=&a" (error_code), "=m" (*udst) : "q" (byte));
-  return error_code != -1;
-}
-
-static bool is_valid_pointer(void *esp, uint8_t argc) {
-  for (uint8_t i = 0; i < argc; ++i) {
-    if (read_user_byte(((uint8_t *)esp) + i) == -1)
-      return false;
+static bool read_int(const uint8_t *uaddr, int *pi) {
+  int bytes[4];
+  for (int i = 0; i < 4; ++i) {
+    bytes[i] = get_user(uaddr + i);
+    if (bytes[i] == -1) return false;
   }
+  *pi = (uint8_t)bytes[0] | (uint8_t)bytes[1] << 8 |
+        (uint8_t)bytes[2] << 16 | (uint8_t)bytes[3] << 24;
   return true;
 }
 
-static bool is_valid_string(void *str) {
+static bool get_int_arg(const uint8_t *uaddr, int pos, int *pi) {
+  return read_int(uaddr + sizeof(int) * pos, pi);
+}
+
+static bool get_str_arg(const uint8_t *uaddr, int pos, char **pstr) {
+  if (!get_int_arg(uaddr, pos, (int *)pstr)) return false;
+  uint8_t *ustr = (uint8_t *)*pstr;
   int ch;
-  while ((ch = read_user_byte((uint8_t *)str++)) != '\0' && ch != -1);
-  return ch == '\0';
+  while ((ch = get_user(ustr++)) != -1) {
+    if (ch == 0) return true;
+  }
+  return false;
 }
 
-static void syscall_exit(int status) {
-  thread_exit(status);
-}
+static bool lock_buffer(const void *buffer, off_t size, bool write) {
+  struct thread *cur = thread_current();
+  size_t num_pages = (pg_round_down(buffer + size) - pg_round_down(buffer)) / PGSIZE + 1;
+  void *upage = pg_round_down(buffer);
+  size_t i;
 
-static void syscall_halt(void) {
-  shutdown();
-}
-
-static pid_t syscall_exec(const char *file_name) {
-  return process_execute(file_name);
-}
-
-static int syscall_wait(pid_t pid) {
-  return process_wait(pid);
-}
-
-static bool syscall_create(const char *file_name, unsigned initial_size) {
-  return filesys_create(file_name, initial_size);
-}
-
-static bool syscall_remove(const char *file_name) {
-  return filesys_remove(file_name);
-}
-
-static int syscall_filesize(struct intr_frame *f) {
-  if (!is_valid_pointer(f->esp + 4, 4)) return -1;
-  int fd = *(int *)(f->esp + 4);
-  f->eax = process_file_length(fd);
-  return 0;
-}
-
-static int syscall_seek(struct intr_frame *f) {
-  if (!is_valid_pointer(f->esp + 4, 8)) return -1;
-  int fd = *(int *)(f->esp + 4);
-  unsigned pos = *(unsigned *)(f->esp + 8);
-  process_seek(fd, pos);
-  return 0;
-}
-
-static int syscall_tell(struct intr_frame *f) {
-  if (!is_valid_pointer(f->esp + 4, 4)) return -1;
-  int fd = *(int *)(f->esp + 4);
-  f->eax = process_file_position(fd);
-  return 0;
-}
-
-static int syscall_create_wrapper(struct intr_frame *f) {
-  if (!is_valid_pointer(f->esp + 4, 4) ||
-      !is_valid_string(*(char **)(f->esp + 4)) ||
-      !is_valid_pointer(f->esp + 8, 4)) return -1;
-  char *str = *(char **)(f->esp + 4);
-  unsigned size = *(int *)(f->esp + 8);
-  f->eax = syscall_create(str, size);
-  return 0;
-}
-
-static int syscall_remove_wrapper(struct intr_frame *f) {
-  if (!is_valid_pointer(f->esp + 4, 4) || !is_valid_string(*(char **)(f->esp + 4))) return -1;
-  char *str = *(char **)(f->esp + 4);
-  f->eax = syscall_remove(str);
-  return 0;
-}
-
-static int syscall_open(struct intr_frame *f) {
-  if (!is_valid_pointer(f->esp + 4, 4) || !is_valid_string(*(char **)(f->esp + 4))) return -1;
-  char *str = *(char **)(f->esp + 4);
-  f->eax = process_open(str);
-  return 0;
-}
-
-static int syscall_close(struct intr_frame *f) {
-  if (!is_valid_pointer(f->esp + 4, 4)) return -1;
-  int fd = *(int *)(f->esp + 4);
-  process_close(fd);
-  return 0;
-}
-
-static int syscall_exit_wrapper(struct intr_frame *f) {
-  if (!is_valid_pointer(f->esp + 4, 4)) return -1;
-  int status = *((int *)f->esp + 1);
-  syscall_exit(status);
-  return 0;
-}
-
-static int syscall_halt_wrapper(struct intr_frame *f UNUSED) {
-  syscall_halt();
-  return 0;
-}
-
-static int syscall_wait_wrapper(struct intr_frame *f) {
-  if (!is_valid_pointer(f->esp + 4, 4)) return -1;
-  pid_t pid = *((int *)f->esp + 1);
-  f->eax = syscall_wait(pid);
-  return 0;
-}
-
-static int syscall_exec_wrapper(struct intr_frame *f) {
-  if (!is_valid_pointer(f->esp + 4, 4) || !is_valid_string(*(char **)(f->esp + 4))) return -1;
-  char *str = *(char **)(f->esp + 4);
-  if (strlen(str) >= PGSIZE || strlen(str) == 0 || str[0] == ' ') return -1;
-  f->eax = syscall_exec(str);
-  return 0;
-}
-
-static int syscall_write(struct intr_frame *f) {
-  if (!is_valid_pointer(f->esp + 4, 12)) return -1;
-  int fd = *(int *)(f->esp + 4);
-  void *buffer = *(char **)(f->esp + 8);
-  unsigned size = *(unsigned *)(f->esp + 12);
-  if (!is_valid_pointer(buffer, 1) || !is_valid_pointer(buffer + size, 1)) return -1;
-  f->eax = process_write(fd, buffer, size);
-  return 0;
-}
-
-static int syscall_read(struct intr_frame *f) {
-  if (!is_valid_pointer(f->esp + 4, 12)) return -1;
-  int fd = *(int *)(f->esp + 4);
-  void *buffer = *(char **)(f->esp + 8);
-  unsigned size = *(unsigned *)(f->esp + 12);
-  if (!is_valid_pointer(buffer, 1) || !is_valid_pointer(buffer + size, 1)) return -1;
-  f->eax = process_read(fd, buffer, size);
-  return 0;
-}
-
-static void terminate_program(void) {
-  thread_exit(-1);
-}
-
-static void syscall_handler(struct intr_frame *f) {
-  if (!is_valid_pointer(f->esp, 4)) {
-    terminate_program();
-    return;
+  grow_stack(cur->pagedir, buffer);
+  for (i = 0; i < num_pages; ++i, upage += PGSIZE) {
+    grow_stack(cur->pagedir, upage);
+    if (!frametable_lock_frame(cur->pagedir, upage, write)) break;
   }
 
-  int syscall_num = *(int *)f->esp;
-  if (syscall_num < 0 || syscall_num >= 20) {
-    terminate_program();
-    return;
+  if (i < num_pages) {
+    for (upage = pg_round_down(buffer), i = 0; i < num_pages; ++i, upage += PGSIZE)
+      frametable_unlock_frame(cur->pagedir, upage);
+    return false;
   }
 
-  int result = -1;
-  switch (syscall_num) {
-    case SYS_EXIT:     result = syscall_exit_wrapper(f); break;
-    case SYS_WRITE:    result = syscall_write(f); break;
-    case SYS_EXEC:     result = syscall_exec_wrapper(f); break;
-    case SYS_HALT:     result = syscall_halt_wrapper(f); break;
-    case SYS_WAIT:     result = syscall_wait_wrapper(f); break;
-    case SYS_CREATE:   result = syscall_create_wrapper(f); break;
-    case SYS_REMOVE:   result = syscall_remove_wrapper(f); break;
-    case SYS_OPEN:     result = syscall_open(f); break;
-    case SYS_CLOSE:    result = syscall_close(f); break;
-    case SYS_READ:     result = syscall_read(f); break;
-    case SYS_FILESIZE: result = syscall_filesize(f); break;
-    case SYS_SEEK:     result = syscall_seek(f); break;
-    case SYS_TELL:     result = syscall_tell(f); break;
-    default:           terminate_program(); return;
-  }
+  return true;
+}
 
-  if (result == -1)
-    terminate_program();
+static void unlock_buffer(const void *buffer, off_t size) {
+  size_t num_pages = (pg_round_down(buffer + size) - pg_round_down(buffer)) / PGSIZE + 1;
+  void *upage = pg_round_down(buffer);
+  for (size_t i = 0; i < num_pages; ++i, upage += PGSIZE)
+    frametable_unlock_frame(thread_current()->pagedir, upage);
 }
 
 void syscall_init(void) {
   intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall");
+}
+
+
+// System Call Implementations
+
+int sys_halt(const uint8_t *arg_base) {
+  shutdown_power_off();
+  NOT_REACHED();
+  return 0;
+}
+
+int sys_exit(const uint8_t *arg_base) {
+  int status;
+  ARG(arg_base, 0, int, status);
+  thread_current()->exit_status = status;
+  thread_exit();
+  NOT_REACHED();
+  return 0;
+}
+
+int sys_exec(const uint8_t *arg_base) {
+  char *cmd_line;
+  ARG_STR(arg_base, 0, cmd_line);
+  return process_execute(cmd_line);
+}
+
+int sys_wait(const uint8_t *arg_base) {
+  tid_t tid;
+  ARG(arg_base, 0, tid_t, tid);
+  return process_wait(tid);
+}
+
+int sys_create(const uint8_t *arg_base) {
+  char *path;
+  off_t size;
+  ARG_STR(arg_base, 0, path);
+  ARG(arg_base, 1, off_t, size);
+  return filesys_create(path, size);
+}
+
+int sys_remove(const uint8_t *arg_base) {
+  char *path;
+  ARG_STR(arg_base, 0, path);
+  return filesys_remove(path);
+}
+
+int sys_open(const uint8_t *arg_base) {
+  char *path;
+  ARG_STR(arg_base, 0, path);
+  return fd_open(path, false);
+}
+
+int sys_filesize(const uint8_t *arg_base) {
+  int fd;
+  ARG(arg_base, 0, int, fd);
+  return fd_size(fd);
+}
+
+int sys_read(const uint8_t *arg_base) {
+  int fd;
+  void *buffer;
+  off_t size;
+  ARG(arg_base, 0, int, fd);
+  ARG_PTR(arg_base, 1, buffer);
+  ARG(arg_base, 2, off_t, size);
+
+  if (!lock_buffer(buffer, size, true)) thread_exit();
+  off_t result = fd_read(fd, buffer, size);
+  unlock_buffer(buffer, size);
+  return result;
+}
+
+int sys_write(const uint8_t *arg_base) {
+  int fd;
+  const void *buffer;
+  off_t size;
+  ARG(arg_base, 0, int, fd);
+  ARG_PTR(arg_base, 1, buffer);
+  ARG(arg_base, 2, off_t, size);
+
+  if (!lock_buffer(buffer, size, false)) thread_exit();
+  off_t result = fd_write(fd, buffer, size);
+  unlock_buffer(buffer, size);
+  return result;
+}
+
+int sys_seek(const uint8_t *arg_base) {
+  int fd;
+  off_t pos;
+  ARG(arg_base, 0, int, fd);
+  ARG(arg_base, 1, off_t, pos);
+  fd_seek(fd, pos);
+  return 0;
+}
+
+int sys_tell(const uint8_t *arg_base) {
+  int fd;
+  ARG(arg_base, 0, int, fd);
+  return fd_tell(fd);
+}
+
+int sys_close(const uint8_t *arg_base) {
+  int fd;
+  ARG(arg_base, 0, int, fd);
+  fd_close(fd);
+  return 0;
+}
+
+int sys_mmap(const uint8_t *arg_base) {
+  int fd;
+  void *addr;
+  ARG(arg_base, 0, int, fd);
+  ARG_PTR(arg_base, 1, addr);
+  return mmap(fd, addr);
+}
+
+int sys_munmap(const uint8_t *arg_base) {
+  int mapid;
+  ARG(arg_base, 0, int, mapid);
+  munmap(mapid);
+  return 0;
+}
+
+int sys_chdir(const uint8_t *arg_base) {
+  char *path;
+  ARG_STR(arg_base, 0, path);
+  return filesys_chdir(path);
+}
+
+int sys_mkdir(const uint8_t *arg_base) {
+  char *path;
+  ARG_STR(arg_base, 0, path);
+  return filesys_mkdir(path, 0);
+}
+
+int sys_readdir(const uint8_t *arg_base) {
+  int fd;
+  void *name;
+  ARG(arg_base, 0, int, fd);
+  ARG_PTR(arg_base, 1, name);
+  return fd_readdir(fd, name);
+}
+
+int sys_isdir(const uint8_t *arg_base) {
+  int fd;
+  ARG(arg_base, 0, int, fd);
+  return fd_is_dir(fd);
+}
+
+int sys_inumber(const uint8_t *arg_base) {
+  int fd;
+  ARG(arg_base, 0, int, fd);
+  return fd_inumber(fd);
+}
+static void syscall_handler(struct intr_frame *f) {
+  int syscall_num;
+  thread_current()->user_esp = f->esp;
+
+  if (!get_int_arg(f->esp, 0, &syscall_num)) thread_exit();
+
+  static int (*syscalls[])(const uint8_t *) = {
+    [SYS_HALT]    = sys_halt,
+    [SYS_EXIT]    = sys_exit,
+    [SYS_EXEC]    = sys_exec,
+    [SYS_WAIT]    = sys_wait,
+    [SYS_CREATE]  = sys_create,
+    [SYS_REMOVE]  = sys_remove,
+    [SYS_OPEN]    = sys_open,
+    [SYS_FILESIZE]= sys_filesize,
+    [SYS_READ]    = sys_read,
+    [SYS_WRITE]   = sys_write,
+    [SYS_SEEK]    = sys_seek,
+    [SYS_TELL]    = sys_tell,
+    [SYS_CLOSE]   = sys_close,
+    [SYS_MMAP]    = sys_mmap,
+    [SYS_MUNMAP]  = sys_munmap,
+    [SYS_CHDIR]   = sys_chdir,
+    [SYS_MKDIR]   = sys_mkdir,
+    [SYS_READDIR] = sys_readdir,
+    [SYS_ISDIR]   = sys_isdir,
+    [SYS_INUMBER] = sys_inumber
+  };
+
+  if (syscall_num >= 0 && syscall_num < sizeof(syscalls)/sizeof(*syscalls) && syscalls[syscall_num])
+    f->eax = syscalls[syscall_num]((uint8_t *)f->esp + sizeof(int));
+  else
+    f->eax = -1;
 }

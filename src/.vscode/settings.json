@@ -1,0 +1,31 @@
+{
+    "files.associations": {
+        "fsutil.h": "c",
+        "filesys.h": "c",
+        "stdio.h": "c",
+        "file.h": "c",
+        "stddef.h": "c",
+        "input.h": "c",
+        "free-map.h": "c",
+        "thread.h": "c",
+        "limits.h": "c",
+        "malloc.h": "c",
+        "vaddr.h": "c",
+        "mmap.h": "c",
+        "frame_table.h": "c",
+        "interrupt.h": "c",
+        "page_metadata.h": "c",
+        "cstdlib": "c",
+        "*.inc": "c",
+        "compare": "c",
+        "cstdint": "c",
+        "timer.h": "c",
+        "optional": "c",
+        "system_error": "c",
+        "array": "c",
+        "functional": "c",
+        "tuple": "c",
+        "type_traits": "c",
+        "utility": "c"
+    }
+}

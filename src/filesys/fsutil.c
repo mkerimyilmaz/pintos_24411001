@@ -15,16 +15,16 @@
 void
 fsutil_ls (char **argv UNUSED) 
 {
-  struct dir *dir;
+  int fd;
   char name[NAME_MAX + 1];
   
   printf ("Files in the root directory:\n");
-  dir = dir_open_root ();
-  if (dir == NULL)
+  fd = fd_open ("/", false);
+  if (fd == -1)
     PANIC ("root dir open failed");
-  while (dir_readdir (dir, name))
+  while (fd_readdir (fd, name))
     printf ("%s\n", name);
-  dir_close (dir);
+  fd_close (fd);
   printf ("End of listing.\n");
 }
 
@@ -215,7 +215,7 @@ fsutil_append (char **argv)
      them, though, in case we have more files to append. */
   memset (buffer, 0, BLOCK_SECTOR_SIZE);
   block_write (dst, sector, buffer);
-  block_write (dst, sector + 1, buffer);
+  block_write (dst, sector, buffer + 1);
 
   /* Finish up. */
   file_close (src);

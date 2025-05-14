@@ -61,8 +61,11 @@ userprog_SRC += userprog/syscall.c	# System call handler.
 userprog_SRC += userprog/gdt.c		# GDT initialization.
 userprog_SRC += userprog/tss.c		# TSS management.
 
-# No virtual memory code yet.
-#vm_SRC = vm/file.c			# Some file.
+# Virtual memory code.
+vm_SRC  = vm/frame_table.c	        # Frame management
+vm_SRC += vm/swap.c	                # Swap management
+
+vm_SRC += vm/memory.c	                # Memory mapping
 
 # Filesystem code.
 filesys_SRC  = filesys/filesys.c	# Filesystem core.
@@ -71,29 +74,18 @@ filesys_SRC += filesys/file.c		# Files.
 filesys_SRC += filesys/directory.c	# Directories.
 filesys_SRC += filesys/inode.c		# File headers.
 filesys_SRC += filesys/fsutil.c		# Utilities.
+filesys_SRC += filesys/cache_manager.c	# Buffer cache.
+filesys_SRC += filesys/path.c	        # Path lookup.
 
 SOURCES = $(foreach dir,$(KERNEL_SUBDIRS),$($(dir)_SRC))
 OBJECTS = $(patsubst %.c,%.o,$(patsubst %.S,%.o,$(SOURCES)))
 DEPENDS = $(patsubst %.o,%.d,$(OBJECTS))
 
-GDBPORT := $(shell expr `id -u` % 5000 + 25000)
-IMAGE = kernel.img
-QEMUOPTS = -serial mon:stdio -gdb tcp::$(GDBPORT)
-QEMUOPTS += $(shell if $(QEMU) -nographic -help | grep -q '^-D '; then echo '-D qemu.log'; fi)
-
-%.o: %.c
-	$(CC) -c $< -o $@ $(CFLAGS) $(CPPFLAGS) $(WARNINGS) $(DEFINES) $(DEPS)
-
-%.o: %.S
-	$(CC) -c $< -o $@ $(ASFLAGS) $(CPPFLAGS) $(DEFINES) $(DEPS)
-
 threads/kernel.lds.s: CPPFLAGS += -P
 threads/kernel.lds.s: threads/kernel.lds.S threads/loader.h
 
-kernel.o: threads/kernel.lds.s $(OBJECTS)
-	$(LD) $(LDOPTIONS) -T $< -o $@ $(OBJECTS)
-	$(OBJDUMP) -S $@ > kernel.asm
-	$(NM) -n $@ > kernel.sym
+kernel.o: threads/kernel.lds.s $(OBJECTS) 
+	$(LD) -T $< -o $@ $(OBJECTS)
 
 kernel.bin: kernel.o
 	$(OBJCOPY) -R .note -R .comment -S $< $@
@@ -102,35 +94,17 @@ threads/loader.o: threads/loader.S
 	$(CC) -c $< -o $@ $(ASFLAGS) $(CPPFLAGS) $(DEFINES)
 
 loader.bin: threads/loader.o
-	$(LD) $(LDOPTIONS) -N -e 0 -Ttext 0x7c00 -o loader.out $<
-	$(OBJDUMP) -S loader.out > loader.asm
-	$(OBJCOPY) -S -O binary -j .text loader.out $@
-	rm loader.out
+	$(LD) -N -e 0 -Ttext 0x7c00 --oformat binary -o $@ $<
 
 os.dsk: kernel.bin
 	cat $^ > $@
 
-kernel.img: kernel.bin loader.bin
-	rm -f $@
-	$(PINTOS) --make-disk=$@ --kernel=kernel.bin --loader=loader.bin
-
-qemu: $(IMAGE)
-	$(QEMU) -drive file=$(IMAGE),index=0,media=disk,format=raw $(QEMUOPTS)
-
-qemu-nox: $(IMAGE)
-	@echo "***"
-	@echo "*** Use Ctrl-a x to exit qemu. If you are under GNU Screen or Tmux and "
-	@echo "*** its prefix key is Ctrl-a, press Ctrl-a twice and x to exit."
-	@echo "***"
-	$(QEMU) -nographic -drive file=$(IMAGE),index=0,media=disk,format=raw $(QEMUOPTS)
-
 clean::
-	rm -f $(OBJECTS) $(DEPENDS)
+	rm -f $(OBJECTS) $(DEPENDS) 
 	rm -f threads/loader.o threads/kernel.lds.s threads/loader.d
 	rm -f kernel.bin.tmp
 	rm -f kernel.o kernel.lds.s
 	rm -f kernel.bin loader.bin
-	rm -f loader.asm kernel.asm kernel.sym
 	rm -f bochsout.txt bochsrc.txt
 	rm -f results grade
 
@@ -138,5 +112,3 @@ Makefile: $(SRCDIR)/Makefile.build
 	cp $< $@
 
 -include $(DEPENDS)
-
-.PHONY: all clean qemu image

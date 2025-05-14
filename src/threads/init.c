@@ -28,6 +28,8 @@
 #include "userprog/gdt.h"
 #include "userprog/syscall.h"
 #include "userprog/tss.h"
+#include "vm/frame_table.h"
+#include "vm/swap.h"
 #else
 #include "tests/threads/tests.h"
 #endif
@@ -36,6 +38,7 @@
 #include "devices/ide.h"
 #include "filesys/filesys.h"
 #include "filesys/fsutil.h"
+#include "filesys/inode.h"
 #endif
 
 /* Page directory with kernel mappings only. */
@@ -113,6 +116,7 @@ main (void)
 #ifdef USERPROG
   exception_init ();
   syscall_init ();
+  initialize_frame_table ();
 #endif
 
   /* Start thread scheduler and enable interrupts. */
@@ -125,6 +129,11 @@ main (void)
   ide_init ();
   locate_block_devices ();
   filesys_init (format_filesys);
+  thread_current ()->cwd = inode_open (ROOT_DIR_SECTOR);
+#endif
+
+#ifdef USERPROG
+  swap_init ();
 #endif
 
   printf ("Boot complete.\n");
@@ -134,7 +143,7 @@ main (void)
 
   /* Finish up. */
   shutdown ();
-  thread_exit (0);
+  thread_exit ();
 }
 
 /* Clear the "BSS", a segment that should be initialized to
@@ -223,7 +232,6 @@ read_command_line (void)
   return argv;
 }
 
-
 /* Parses options in ARGV[]
    and returns the first non-option argument. */
 static char **
@@ -286,7 +294,6 @@ run_task (char **argv)
   
   printf ("Executing '%s':\n", task);
 #ifdef USERPROG
-  process_init();
   process_wait (process_execute (task));
 #else
   run_test (task);
@@ -294,9 +301,6 @@ run_task (char **argv)
   printf ("Execution of '%s' complete.\n", task);
 }
 
-void print_hello(char **argv) {
-  printf("Hello World!\n");
-}
 /* Executes all of the actions specified in ARGV[]
    up to the null pointer sentinel. */
 static void
@@ -321,10 +325,8 @@ run_actions (char **argv)
       {"extract", 1, fsutil_extract},
       {"append", 2, fsutil_append},
 #endif
-      {"hello", 1, print_hello},
       {NULL, 0, NULL},
     };
-  /* If no arguments are passed, call the hello_world function. */
 
   while (*argv != NULL)
     {
